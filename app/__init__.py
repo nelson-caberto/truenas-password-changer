@@ -1,30 +1,29 @@
 """Flask application factory for TrueNAS Password Change Web Interface."""
 
+import os
 from flask import Flask
 
+from app.config import config
 
-def create_app(config=None):
+
+def create_app(config_override=None):
     """Create and configure the Flask application.
     
     Args:
-        config: Optional configuration dictionary to override defaults.
+        config_override: Optional configuration dictionary to override defaults.
         
     Returns:
         Configured Flask application instance.
     """
     app = Flask(__name__)
     
-    # Default configuration
-    app.config.update(
-        SECRET_KEY='dev-key-change-in-production',
-        TRUENAS_HOST='localhost',
-        TRUENAS_PORT=443,
-        TRUENAS_USE_SSL=True,
-    )
+    # Load configuration from environment or default
+    env = os.environ.get('FLASK_ENV', 'development')
+    app.config.from_object(config.get(env, config['default']))
     
     # Override with provided config
-    if config:
-        app.config.update(config)
+    if config_override:
+        app.config.update(config_override)
     
     # Register blueprints
     from app.routes import auth, password

@@ -1,45 +1,12 @@
 """Password change routes."""
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 
 from app.forms import PasswordChangeForm
-from app.truenas_client import TrueNASClient, TrueNASAPIError
+from app.truenas_client import TrueNASAPIError
+from app.utils import get_truenas_client, login_required
 
 bp = Blueprint('password', __name__)
-
-
-def get_truenas_client() -> TrueNASClient:
-    """Create a TrueNAS client from app configuration.
-    
-    Returns:
-        Configured TrueNASClient instance.
-    """
-    return TrueNASClient(
-        host=current_app.config['TRUENAS_HOST'],
-        port=current_app.config['TRUENAS_PORT'],
-        use_ssl=current_app.config['TRUENAS_USE_SSL']
-    )
-
-
-def login_required(f):
-    """Decorator to require login for a route.
-    
-    Args:
-        f: The view function to wrap.
-        
-    Returns:
-        Wrapped function that checks for login.
-    """
-    from functools import wraps
-    
-    @wraps(f)
-    def decorated_function(*args, **kwargs):
-        if 'username' not in session:
-            flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('auth.login'))
-        return f(*args, **kwargs)
-    
-    return decorated_function
 
 
 @bp.route('/change-password', methods=['GET', 'POST'])

@@ -1,24 +1,12 @@
 """Authentication routes for login and logout."""
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, current_app
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 
 from app.forms import LoginForm
-from app.truenas_client import TrueNASClient, TrueNASAPIError
+from app.truenas_client import TrueNASAPIError
+from app.utils import get_truenas_client
 
 bp = Blueprint('auth', __name__)
-
-
-def get_truenas_client() -> TrueNASClient:
-    """Create a TrueNAS client from app configuration.
-    
-    Returns:
-        Configured TrueNASClient instance.
-    """
-    return TrueNASClient(
-        host=current_app.config['TRUENAS_HOST'],
-        port=current_app.config['TRUENAS_PORT'],
-        use_ssl=current_app.config['TRUENAS_USE_SSL']
-    )
 
 
 @bp.route('/')

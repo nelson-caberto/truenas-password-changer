@@ -69,7 +69,7 @@ class TestLoginRoute:
         assert response.status_code == 200
         assert b'Username is required' in response.data
     
-    @patch('app.routes.auth.TrueNASClient')
+    @patch('app.utils.TrueNASClient')
     def test_login_success(self, mock_client_class, client):
         """Test successful login."""
         mock_client = MagicMock()
@@ -87,7 +87,7 @@ class TestLoginRoute:
         mock_client.login.assert_called_once_with('testuser', 'testpass123')
         mock_client.disconnect.assert_called()
     
-    @patch('app.routes.auth.TrueNASClient')
+    @patch('app.utils.TrueNASClient')
     def test_login_failure_invalid_credentials(self, mock_client_class, client):
         """Test login fails with invalid credentials."""
         mock_client = MagicMock()
@@ -105,7 +105,7 @@ class TestLoginRoute:
         assert response.status_code == 200
         assert b'Invalid credentials' in response.data
     
-    @patch('app.routes.auth.TrueNASClient')
+    @patch('app.utils.TrueNASClient')
     def test_login_failure_connection_error(self, mock_client_class, client):
         """Test login fails with connection error."""
         mock_client = MagicMock()
@@ -120,7 +120,7 @@ class TestLoginRoute:
         assert response.status_code == 200
         assert b'Login failed' in response.data
     
-    @patch('app.routes.auth.TrueNASClient')
+    @patch('app.utils.TrueNASClient')
     def test_login_stores_session(self, mock_client_class, client):
         """Test login stores user info in session."""
         mock_client = MagicMock()
