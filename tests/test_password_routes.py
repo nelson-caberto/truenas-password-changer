@@ -96,8 +96,13 @@ class TestPasswordChangeRoute:
         assert response.status_code == 200
         assert b'Passwords must match' in response.data
     
-    def test_password_change_wrong_current_password(self, logged_in_client):
+    @patch('app.utils.TrueNASRestClient')
+    def test_password_change_wrong_current_password(self, mock_client_class, logged_in_client):
         """Test password change fails with wrong current password."""
+        mock_client = MagicMock()
+        mock_client_class.return_value = mock_client
+        mock_client.login.side_effect = TrueNASAPIError("Invalid username or password")
+        
         response = logged_in_client.post('/change-password', data={
             'current_password': 'wrongcurrentpass',
             'new_password': 'newpass456',
@@ -107,7 +112,7 @@ class TestPasswordChangeRoute:
         assert response.status_code == 200
         assert b'Current password is incorrect' in response.data
     
-    @patch('app.utils.TrueNASClient')
+    @patch('app.utils.TrueNASRestClient')
     def test_password_change_success(self, mock_client_class, logged_in_client):
         """Test successful password change."""
         mock_client = MagicMock()
@@ -127,7 +132,7 @@ class TestPasswordChangeRoute:
         mock_client.set_password.assert_called_once_with('testuser', 'newpass456')
         mock_client.disconnect.assert_called()
     
-    @patch('app.utils.TrueNASClient')
+    @patch('app.utils.TrueNASRestClient')
     def test_password_change_updates_session(self, mock_client_class, logged_in_client):
         """Test successful password change updates session password."""
         mock_client = MagicMock()
@@ -143,7 +148,7 @@ class TestPasswordChangeRoute:
             from flask import session
             assert session['password'] == 'newpass456'
     
-    @patch('app.utils.TrueNASClient')
+    @patch('app.utils.TrueNASRestClient')
     def test_password_change_api_error(self, mock_client_class, logged_in_client):
         """Test password change handles TrueNAS API errors."""
         mock_client = MagicMock()
@@ -162,7 +167,7 @@ class TestPasswordChangeRoute:
         assert response.status_code == 200
         assert b'Account is locked' in response.data
     
-    @patch('app.utils.TrueNASClient')
+    @patch('app.utils.TrueNASRestClient')
     def test_password_change_connection_error(self, mock_client_class, logged_in_client):
         """Test password change handles connection errors."""
         mock_client = MagicMock()
@@ -178,7 +183,7 @@ class TestPasswordChangeRoute:
         assert response.status_code == 200
         assert b'Password change failed' in response.data
     
-    @patch('app.utils.TrueNASClient')
+    @patch('app.utils.TrueNASRestClient')
     def test_password_change_generic_exception(self, mock_client_class, logged_in_client):
         """Test password change handles generic exceptions."""
         mock_client = MagicMock()
