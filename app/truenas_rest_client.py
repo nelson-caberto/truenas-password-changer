@@ -97,16 +97,12 @@ class TrueNASRestClient:
     def login(self, username: str, password: str, otp_token: str = None) -> bool:
         """Authenticate with TrueNAS REST API.
         
-        When using API key authentication:
-        - Validates that the username exists
-        - Password is ignored (API key proves admin access)
-        
-        When using token authentication:
-        - Validates username and password via token generation
+        Validates username and password using Basic Authentication against
+        a protected endpoint. This works regardless of API key configuration.
         
         Args:
             username: TrueNAS username.
-            password: TrueNAS password (only used for token auth, ignored for API key auth).
+            password: TrueNAS password.
             otp_token: Optional OTP token for 2FA (not used in REST API).
             
         Returns:
@@ -115,50 +111,36 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
-        # Always validate password via token generation (use unauthenticated session)
-        # Even with API key, we verify the user's actual credentials for login
+        import base64
+        
         try:
             print(f"DEBUG: Attempting to verify password for user '{username}'")
             
-            # Create a new session without API key auth for credential validation
+            # Create a new session for credential validation using Basic Auth
             temp_session = requests.Session()
-            if not self.use_ssl:
-                temp_session.verify = False
-            else:
-                # For SSL, we need to handle certificate verification
-                temp_session.verify = False  # Allow self-signed certs
+            temp_session.verify = False  # Allow self-signed certs
             
-            payload = {
-                "username": username,
-                "password": password
-            }
+            # Use Basic Authentication to verify credentials
+            creds = base64.b64encode(f"{username}:{password}".encode()).decode()
+            temp_session.headers.update({"Authorization": f"Basic {creds}"})
             
-            response = temp_session.post(
-                self._get_api_url("/auth/generate_token"),
-                json=payload,
+            # Try to access a simple protected endpoint
+            response = temp_session.get(
+                self._get_api_url("/system/info"),
                 timeout=10
             )
-            print(f"DEBUG: Token endpoint response status: {response.status_code}")
+            print(f"DEBUG: Basic auth response status: {response.status_code}")
             
             if response.status_code == 200:
-                data = response.json()
-                self._access_token = data.get("access_token")
-                if not self._access_token:
-                    raise TrueNASAPIError("No access token in response")
-                
                 print(f"DEBUG: User '{username}' password verified successfully")
-                # Add token to headers for future requests
-                self._session.headers.update({
-                    "Authorization": f"Bearer {self._access_token}"
-                })
                 return True
             elif response.status_code == 401:
                 print(f"DEBUG: Auth failed - invalid credentials")
-                raise TrueNASAPIError(f"Invalid username or password")
+                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             else:
                 error_msg = response.text if response.text else f"HTTP {response.status_code}"
                 print(f"DEBUG: Auth failed: {error_msg}")
-                raise TrueNASAPIError(f"Invalid username or password")
+                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
         except TrueNASAPIError:
             raise
         except Exception as e:
