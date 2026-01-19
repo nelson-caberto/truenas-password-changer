@@ -14,6 +14,18 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 - REST API based (efficient and reliable)
 - Comprehensive testing (104 tests, 95%+ coverage)
 
+## Compatibility
+
+**Developed and Tested For:**
+- **TrueNAS SCALE 25.10.1** (primary target)
+- TrueNAS API v2.0
+
+**Expected to work with:**
+- TrueNAS SCALE 24.x and newer
+- Any TrueNAS version with REST API v2.0 support
+
+**Note:** The application uses standard Unix authentication mechanisms (SMB and password hashes) that are platform-independent. While developed on SCALE 25.10.1, it should work with most TrueNAS SCALE and potentially TrueNAS CORE versions that support the REST API v2.0.
+
 ## Requirements
 
 - Python 3.10+
