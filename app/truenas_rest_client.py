@@ -97,9 +97,16 @@ class TrueNASRestClient:
     def login(self, username: str, password: str, otp_token: str = None) -> bool:
         """Authenticate with TrueNAS REST API.
         
+        When using API key authentication:
+        - Validates that the username exists
+        - Password is ignored (API key proves admin access)
+        
+        When using token authentication:
+        - Validates username and password via token generation
+        
         Args:
             username: TrueNAS username.
-            password: TrueNAS password.
+            password: TrueNAS password (only used for token auth, ignored for API key auth).
             otp_token: Optional OTP token for 2FA (not used in REST API).
             
         Returns:
@@ -108,27 +115,42 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
+        # If API key is configured, validate username exists instead of checking password
+        if self._api_key:
+            try:
+                response = self._session.get(
+                    self._get_api_url("/user"),
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    users = response.json()
+                    for user in users:
+                        if user.get("username") == username:
+                            return True
+                    
+                    raise TrueNASAPIError(f"User '{username}' not found")
+                else:
+                    raise TrueNASAPIError(
+                        f"Failed to verify user: HTTP {response.status_code}"
+                    )
+            except TrueNASAPIError:
+                raise
+            except Exception as e:
+                raise TrueNASAPIError(f"User verification failed: {str(e)}")
+        
+        # Otherwise, use token-based authentication
         try:
             payload = {
                 "username": username,
                 "password": password
             }
             
-            # Temporarily remove API key header for token generation if it exists
-            # (API key auth will be used for actual operations, but we still need to
-            # verify the user's credentials)
-            auth_header = self._session.headers.pop("Authorization", None)
-            
-            try:
-                response = self._session.post(
-                    self._get_api_url("/auth/generate_token"),
-                    json=payload,
-                    timeout=30
-                )
-            finally:
-                # Restore API key header if it was present
-                if auth_header:
-                    self._session.headers["Authorization"] = auth_header
+            response = self._session.post(
+                self._get_api_url("/auth/generate_token"),
+                json=payload,
+                timeout=30
+            )
             
             if response.status_code == 200:
                 data = response.json()
@@ -136,13 +158,10 @@ class TrueNASRestClient:
                 if not self._access_token:
                     raise TrueNASAPIError("No access token in response")
                 
-                # If API key is NOT configured, add the token to headers for future requests
-                # If API key IS configured, we'll continue using it for actual operations
-                # but we've now verified the user's credentials
-                if not self._api_key:
-                    self._session.headers.update({
-                        "Authorization": f"Bearer {self._access_token}"
-                    })
+                # Add token to headers for future requests
+                self._session.headers.update({
+                    "Authorization": f"Bearer {self._access_token}"
+                })
                 return True
             elif response.status_code == 401:
                 raise TrueNASAPIError("Invalid username or password")
