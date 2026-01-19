@@ -4,12 +4,15 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 
 ## Features
 
-- User authentication against TrueNAS
+- **Universal Authentication**: Works for ALL users (admin and non-admin accounts)
+- **Dual Authentication Methods**: 
+  - SMB authentication (preferred for SMB-enabled users)
+  - Unix password hash verification (fallback for all users)
 - Self-service password change
 - Simple, clean web interface
 - No password requirements enforced (TrueNAS handles validation)
-- **Dual API Support**: Works with both REST API and WebSocket JSON-RPC APIs
-- Comprehensive testing (102 tests, 94% coverage)
+- REST API based (efficient and reliable)
+- Comprehensive testing (104 tests, 95%+ coverage)
 
 ## Requirements
 
@@ -36,6 +39,28 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 
 ## Configuration
 
+### Step 1: Get TrueNAS API Key
+
+The application requires a TrueNAS API key to authenticate users and change passwords.
+
+**To generate an API key:**
+
+1. Log in to your TrueNAS web interface
+2. Click on the user icon (top right) or go to **Credentials > Local Users**
+3. Click on your admin user (e.g., `truenas_admin` or `admin`)
+4. Scroll down to the **API Keys** section
+5. Click **Add** to create a new API key
+6. Give it a name (e.g., "Password Manager")
+7. Click **Save** or **Add**
+8. **Important**: Copy the API key immediately - it will only be shown once!
+
+The API key will look something like:
+```
+1-AbCdEfGhIjKlMnOpQrStUvWxYz1234567890AbCdEfGhIjKlMnOpQrSt
+```
+
+### Step 2: Configure Environment
+
 Create a `.env` file from the example:
 
 ```bash
@@ -48,43 +73,61 @@ Edit `.env` with your TrueNAS server details:
 TRUENAS_HOST=192.168.1.100
 TRUENAS_PORT=443
 TRUENAS_USE_SSL=true
+TRUENAS_API_KEY=1-YourActualAPIKeyHere
 SECRET_KEY=your-secret-key-here
 FLASK_ENV=development
-TRUENAS_CLIENT=rest
 ```
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `TRUENAS_HOST` | TrueNAS server hostname or IP | `localhost` |
-| `TRUENAS_PORT` | TrueNAS API port | `443` |
-| `TRUENAS_USE_SSL` | Use SSL for connection | `true` |
-| `SECRET_KEY` | Flask secret key for sessions | `change-this-secret-key-in-production` |
-| `FLASK_ENV` | Environment mode (`development`, `production`, `testing`) | `development` |
-| `TRUENAS_CLIENT` | API client to use (`rest` or `websocket`) | `rest` |
+| Variable | Description | Default | Required |
+|----------|-------------|---------|----------|
+| `TRUENAS_HOST` | TrueNAS server hostname or IP | `localhost` | ✅ Yes |
+| `TRUENAS_PORT` | TrueNAS API port | `443` | No |
+| `TRUENAS_USE_SSL` | Use SSL for connection | `true` | No |
+| `TRUENAS_API_KEY` | TrueNAS API key (see above) | None | ✅ Yes |
+| `SECRET_KEY` | Flask secret key for sessions | `change-this-secret-key-in-production` | ✅ Yes |
+| `FLASK_ENV` | Environment mode (`development`, `production`, `testing`) | `development` | No |
+
+## How Authentication Works
+
+The application uses a **dual authentication approach** that works for ALL TrueNAS users:
+
+### Authentication Flow
+
+1. **User Login**: User enters their TrueNAS username and password
+2. **Primary Method - SMB Authentication** (if user has SMB enabled):
+   - Attempts SMB authentication against port 445
+   - Fast and direct verification
+   - Works for users with SMB access enabled
+3. **Fallback Method - Hash Verification** (if SMB fails or unavailable):
+   - Fetches user's Unix password hash using the API key
+   - Verifies password locally using Python's `crypt` module
+   - Works for ALL users regardless of admin status or SMB access
+
+### Why This Approach?
+
+TrueNAS SCALE restricts API authentication to users with admin roles. Regular users (with `roles: []`) cannot authenticate via traditional API methods even with correct passwords. This dual approach solves that limitation:
+
+- **SMB auth**: Preferred for speed when available
+- **Hash verification**: Universal fallback using API key privileges
+- **Result**: Any TrueNAS user can log in and change their password
 
 ## API Client Selection
 
-### REST API (Recommended)
+### REST API (Used)
 - **Status**: ✅ Fully functional and tested
-- **Use**: `TRUENAS_CLIENT=rest`
 - **Advantages**:
   - Standard HTTP protocol
   - Better error handling
-  - No WebSocket compatibility issues
-  - Token-based authentication
+  - Token-based authentication with API key
   - Well-documented in TrueNAS
+  - Works with hash verification method
 
-### WebSocket JSON-RPC (Legacy)
-- **Status**: ⚠️ Tested but may have compatibility issues with some TrueNAS versions
-- **Use**: `TRUENAS_CLIENT=websocket`
-- **Note**: If you encounter WebSocket connection errors, see [WEBSOCKET_DIAGNOSIS.md](WEBSOCKET_DIAGNOSIS.md)
-
-The application defaults to REST API. Switch to WebSocket if needed:
-```bash
-export TRUENAS_CLIENT=websocket
-```
+### WebSocket JSON-RPC (Legacy/Removed)
+- **Status**: ⚠️ Previously supported but removed
+- **Limitation**: Only worked for admin users with roles
+- **Note**: If you need WebSocket support, use older commits before hash verification implementation
 
 ## Running the Application
 
@@ -118,9 +161,9 @@ pipenv run pytest -v
 ```
 
 Current test results:
-- **102 tests** (87 unit + 15 integration/REST tests)
-- **94% code coverage**
-- All client implementations tested
+- **104 tests** (all passing)
+- **95%+ code coverage**
+- Comprehensive unit and integration tests
 
 ## Project Structure
 
@@ -130,8 +173,7 @@ truenas-web-password/
 │   ├── __init__.py              # Flask application factory
 │   ├── config.py                 # Configuration classes
 │   ├── forms.py                  # WTForms form definitions
-│   ├── truenas_client.py         # TrueNAS WebSocket API client
-│   ├── truenas_rest_client.py    # TrueNAS REST API client (recommended)
+│   ├── truenas_rest_client.py    # TrueNAS REST API client with dual auth
 │   ├── utils.py                  # Shared utility functions
 │   ├── routes/
 │   │   ├── __init__.py
@@ -147,8 +189,8 @@ truenas-web-password/
 │   ├── test_app.py               # Application factory tests
 │   ├── test_auth_routes.py       # Authentication route tests
 │   ├── test_forms.py             # Form validation tests
+│   ├── test_integration.py       # Full user flow integration tests
 │   ├── test_password_routes.py   # Password change route tests
-│   ├── test_truenas_client.py    # WebSocket client tests
 │   ├── test_truenas_rest_client.py  # REST client tests
 │   └── test_utils.py             # Utility function tests
 ├── Pipfile                       # Pipenv dependencies
@@ -156,38 +198,70 @@ truenas-web-password/
 ├── pytest.ini                    # Pytest configuration
 ├── run.py                        # Application entry point
 ├── .env.example                  # Example environment configuration
-├── WEBSOCKET_DIAGNOSIS.md        # WebSocket troubleshooting guide
-├── REST_API_MIGRATION.md         # REST API implementation notes
 └── README.md
 ```
 
 ## How It Works
 
 1. User visits the web interface and logs in with their TrueNAS credentials
-2. The application authenticates against TrueNAS (via REST API by default)
-3. User enters current password and new password
-4. The application calls the password change API
-5. User receives confirmation of successful password change
+2. The application authenticates via:
+   - **First**: SMB authentication (if user has SMB enabled)
+   - **Fallback**: Unix password hash verification using API key
+3. After successful login, user can change their password
+4. User enters current password and new password
+5. The application calls the TrueNAS password change API using the API key
+6. User receives confirmation of successful password change
+
+## Security Notes
+
+- **API Key**: Keep your TrueNAS API key secure - it has admin privileges
+- **HTTPS**: Use HTTPS in production (reverse proxy recommended)
+- **Session Security**: Flask sessions are signed with SECRET_KEY
+- **Password Verification**: Passwords are verified locally, never stored
+- **SMB Connection**: SMB authentication is attempted over port 445 (firewall may need configuration)
 
 ## Troubleshooting
 
-### WebSocket Connection Errors
+### Missing API Key Error
 
-If you encounter WebSocket connection errors:
-1. Check [WEBSOCKET_DIAGNOSIS.md](WEBSOCKET_DIAGNOSIS.md) for detailed diagnostics
-2. Try switching to REST API: `export TRUENAS_CLIENT=rest`
-3. Verify TrueNAS is accessible: `curl -k https://your-truenas-host/api/v2.0/system/info`
+If you see "API key required for password verification":
+1. Generate an API key in TrueNAS (see Configuration section above)
+2. Add it to your `.env` file as `TRUENAS_API_KEY=your-key-here`
+3. Restart the application
+
+### Connection Errors
+
+If you cannot connect to TrueNAS:
+1. Verify TrueNAS is accessible: `curl -k https://your-truenas-host/api/v2.0/system/info`
+2. Check firewall settings (port 443 for API, port 445 for SMB)
+3. Verify `TRUENAS_HOST` in `.env` is correct
+4. Check SSL certificate settings (use `TRUENAS_USE_SSL=false` for HTTP)
 
 ### Invalid Credentials
 
-- Verify the credentials work on the TrueNAS web UI
-- Check user permissions (some TrueNAS users may have restricted access)
-- Ensure the user account exists on the TrueNAS instance
+- Verify the credentials work on the TrueNAS web UI or via SSH
+- Check that the user account exists on the TrueNAS instance
+- For SMB users: Verify SMB service is enabled and running
+- Check TrueNAS logs for authentication failures
+
+### Python Crypt Deprecation Warning
+
+You may see a warning about the deprecated `crypt` module. This is expected and will be addressed in future Python versions. The application will continue to work normally.
 
 ## Limitations
 
+- Requires a TrueNAS API key with admin privileges
 - Only works with local TrueNAS accounts (not LDAP/Active Directory users)
+- SMB authentication requires port 445 access
 - Runs over HTTP by default (use a reverse proxy for HTTPS in production)
+
+## Dependencies
+
+- Flask 3.x - Web framework
+- WTForms - Form validation
+- python-dotenv - Environment configuration
+- pysmb - SMB authentication (optional, used for SMB users)
+- requests - HTTP client for REST API
 
 ## License
 
