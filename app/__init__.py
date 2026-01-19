@@ -2,8 +2,12 @@
 
 import os
 from flask import Flask
+from dotenv import load_dotenv
 
 from app.config import config
+
+# Load environment variables from .env file
+load_dotenv()
 
 
 def create_app(config_override=None):

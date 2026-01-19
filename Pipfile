@@ -7,6 +7,7 @@ name = "pypi"
 flask = "*"
 websocket-client = "*"
 wtforms = "*"
+python-dotenv = "*"
 
 [dev-packages]
 pytest = "*"

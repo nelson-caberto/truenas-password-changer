@@ -34,23 +34,31 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 
 ## Configuration
 
-Set the following environment variables to configure the application:
+Create a `.env` file from the example:
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your TrueNAS server details:
+
+```
+TRUENAS_HOST=192.168.1.100
+TRUENAS_PORT=443
+TRUENAS_USE_SSL=true
+SECRET_KEY=your-secret-key-here
+FLASK_ENV=development
+```
+
+### Environment Variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `TRUENAS_HOST` | TrueNAS server hostname or IP | `localhost` |
 | `TRUENAS_PORT` | TrueNAS WebSocket API port | `443` |
 | `TRUENAS_USE_SSL` | Use SSL for WebSocket connection | `true` |
-| `SECRET_KEY` | Flask secret key for sessions | `dev-key-change-in-production` |
+| `SECRET_KEY` | Flask secret key for sessions | `change-this-secret-key-in-production` |
 | `FLASK_ENV` | Environment mode (`development`, `production`, `testing`) | `development` |
-
-Example:
-```bash
-export TRUENAS_HOST=192.168.1.100
-export TRUENAS_PORT=443
-export TRUENAS_USE_SSL=true
-export SECRET_KEY=your-secret-key-here
-```
 
 ## Running the Application
 

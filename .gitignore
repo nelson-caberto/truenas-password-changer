@@ -8,8 +8,9 @@ __pycache__/
 venv/
 ENV/
 
-# Pipenv
+# Environment variables
 .env
+.env.local
 
 # IDE
 .vscode/
