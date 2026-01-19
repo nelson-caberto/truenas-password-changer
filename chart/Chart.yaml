@@ -1,0 +1,16 @@
+apiVersion: v2
+name: truenas-password-manager
+description: Self-service password change portal for TrueNAS local users
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/yourusername/truenas-web-password
+icon: https://www.truenas.com/wp-content/uploads/2021/07/TrueNAS-Icon-Circle.png
+keywords:
+  - truenas
+  - password
+  - self-service
+  - user-management
+maintainers:
+  - name: Your Name
+    email: your@email.com

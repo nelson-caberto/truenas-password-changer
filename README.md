@@ -151,6 +151,98 @@ pipenv run python run.py
 
 The application will be available at `http://localhost:5000`
 
+### Docker Deployment
+
+#### Quick Start with Docker Compose
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` with your TrueNAS details:
+   ```
+   TRUENAS_HOST=your-truenas-ip
+   TRUENAS_API_KEY=your-api-key
+   SECRET_KEY=generate-a-random-string
+   ```
+
+3. Build and run:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access at `http://localhost:5000`
+
+#### Manual Docker Build
+
+```bash
+# Build the image
+docker build -t truenas-password-manager .
+
+# Run the container
+docker run -d \
+  -p 5000:5000 \
+  -e TRUENAS_HOST=your-truenas-ip \
+  -e TRUENAS_PORT=443 \
+  -e TRUENAS_USE_SSL=true \
+  -e TRUENAS_API_KEY=your-api-key \
+  -e SECRET_KEY=your-secret-key \
+  --name password-manager \
+  truenas-password-manager
+```
+
+### TrueNAS SCALE App Deployment
+
+The application includes a Helm chart for deploying as a TrueNAS SCALE custom app.
+
+#### Option 1: Custom App (Recommended)
+
+1. In TrueNAS SCALE, go to **Apps** → **Discover Apps** → **Custom App**
+
+2. Configure the app:
+   - **Application Name**: `password-manager`
+   - **Image Repository**: `ghcr.io/yourusername/truenas-password-manager`
+   - **Image Tag**: `latest`
+
+3. Add environment variables:
+   | Name | Value |
+   |------|-------|
+   | `TRUENAS_HOST` | Your TrueNAS IP (e.g., `10.0.0.100`) |
+   | `TRUENAS_PORT` | `443` |
+   | `TRUENAS_USE_SSL` | `true` |
+   | `TRUENAS_API_KEY` | Your API key |
+   | `SECRET_KEY` | Random string for sessions |
+
+4. Configure networking:
+   - **Port**: `5000`
+   - **Node Port**: Choose an available port (e.g., `30500`)
+
+5. Deploy and access at `http://your-truenas-ip:30500`
+
+#### Option 2: Helm Chart
+
+If you have a custom TrueNAS catalog or want to use Helm directly:
+
+```bash
+# Add your chart repository (if using one)
+helm repo add my-charts https://your-chart-repo
+
+# Install
+helm install password-manager ./chart \
+  --set truenas.host=your-truenas-ip \
+  --set truenas.apiKey=your-api-key
+```
+
+#### Important Notes for TrueNAS Deployment
+
+- **Use the TrueNAS host IP**, not `localhost` (the container runs in its own network)
+- **Port 445 (SMB)** must be accessible from the container to TrueNAS for SMB authentication
+- **Port 443 (API)** must be accessible for REST API calls
+- Consider using **Ingress** or a **reverse proxy** for HTTPS in production
+
+The application will be available at `http://localhost:5000`
+
 ### Production Mode
 
 For production, use a WSGI server like Gunicorn:
