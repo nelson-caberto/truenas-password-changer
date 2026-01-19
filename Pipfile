@@ -8,6 +8,7 @@ flask = "*"
 websocket-client = "*"
 wtforms = "*"
 python-dotenv = "*"
+requests = "*"
 
 [dev-packages]
 pytest = "*"

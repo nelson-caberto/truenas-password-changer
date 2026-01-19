@@ -1,22 +1,36 @@
 """Shared utilities for the Flask application."""
 
+import os
 from functools import wraps
 from flask import session, flash, redirect, url_for, current_app
 
 from app.truenas_client import TrueNASClient
+from app.truenas_rest_client import TrueNASRestClient
 
 
-def get_truenas_client() -> TrueNASClient:
+def get_truenas_client():
     """Create a TrueNAS client from app configuration.
     
+    Supports both WebSocket (legacy) and REST API (recommended) clients.
+    Configured via TRUENAS_CLIENT environment variable or config.
+    
     Returns:
-        Configured TrueNASClient instance.
+        Configured TrueNASClient or TrueNASRestClient instance.
     """
-    return TrueNASClient(
-        host=current_app.config['TRUENAS_HOST'],
-        port=current_app.config['TRUENAS_PORT'],
-        use_ssl=current_app.config['TRUENAS_USE_SSL']
-    )
+    # Determine which client to use (default to REST API)
+    client_type = os.getenv('TRUENAS_CLIENT', 'rest').lower()
+    
+    config = {
+        'host': current_app.config['TRUENAS_HOST'],
+        'port': current_app.config['TRUENAS_PORT'],
+        'use_ssl': current_app.config['TRUENAS_USE_SSL']
+    }
+    
+    if client_type == 'websocket':
+        return TrueNASClient(**config)
+    else:
+        # Default to REST API client
+        return TrueNASRestClient(**config)
 
 
 def login_required(f):

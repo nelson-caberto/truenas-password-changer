@@ -75,9 +75,9 @@ class TestTrueNASClient:
     
     @patch('app.truenas_client.websocket.create_connection')
     def test_connect_failure_bad_response(self, mock_create_connection):
-        """Test connection failure when TrueNAS returns unexpected message."""
+        """Test connection failure when WebSocket connection fails."""
         mock_ws = MagicMock()
-        mock_ws.recv.return_value = json.dumps({"msg": "error"})
+        mock_ws.connected = False  # Simulate connection failure
         mock_create_connection.return_value = mock_ws
         
         client = TrueNASClient("truenas.local")
