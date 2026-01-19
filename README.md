@@ -252,6 +252,114 @@ pipenv install gunicorn
 pipenv run gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
 ```
 
+### Reverse Proxy Configuration
+
+For production deployments, use a reverse proxy for HTTPS termination and security.
+
+#### Nginx Configuration
+
+```nginx
+server {
+    listen 80;
+    server_name password.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name password.yourdomain.com;
+
+    ssl_certificate /path/to/fullchain.pem;
+    ssl_certificate_key /path/to/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+#### Apache Configuration
+
+Enable required modules:
+```bash
+sudo a2enmod proxy proxy_http ssl headers
+```
+
+Virtual host configuration:
+```apache
+<VirtualHost *:80>
+    ServerName password.yourdomain.com
+    Redirect permanent / https://password.yourdomain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName password.yourdomain.com
+
+    SSLEngine on
+    SSLCertificateFile /path/to/fullchain.pem
+    SSLCertificateKeyFile /path/to/privkey.pem
+    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+
+    # Security headers
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:5000/
+    ProxyPassReverse / http://127.0.0.1:5000/
+
+    # Timeouts
+    ProxyTimeout 60
+</VirtualHost>
+```
+
+#### Systemd Service (for auto-start)
+
+Create `/etc/systemd/system/truenas-password-manager.service`:
+
+```ini
+[Unit]
+Description=TrueNAS Password Manager
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/truenas-password-manager
+Environment="PATH=/opt/truenas-password-manager/.venv/bin"
+EnvironmentFile=/opt/truenas-password-manager/.env
+ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable truenas-password-manager
+sudo systemctl start truenas-password-manager
+```
+
 ## Running Tests
 
 Run all tests with coverage:
