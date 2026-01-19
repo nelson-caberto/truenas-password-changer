@@ -115,42 +115,30 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
-        # If API key is configured, validate username exists instead of checking password
-        if self._api_key:
-            try:
-                response = self._session.get(
-                    self._get_api_url("/user"),
-                    timeout=30
-                )
-                
-                if response.status_code == 200:
-                    users = response.json()
-                    for user in users:
-                        if user.get("username") == username:
-                            return True
-                    
-                    raise TrueNASAPIError(f"User '{username}' not found")
-                else:
-                    raise TrueNASAPIError(
-                        f"Failed to verify user: HTTP {response.status_code}"
-                    )
-            except TrueNASAPIError:
-                raise
-            except Exception as e:
-                raise TrueNASAPIError(f"User verification failed: {str(e)}")
-        
-        # Otherwise, use token-based authentication
+        # Always validate password via token generation (use unauthenticated session)
+        # Even with API key, we verify the user's actual credentials for login
         try:
+            print(f"DEBUG: Attempting to verify password for user '{username}'")
+            
+            # Create a new session without API key auth for credential validation
+            temp_session = requests.Session()
+            if not self.use_ssl:
+                temp_session.verify = False
+            else:
+                # For SSL, we need to handle certificate verification
+                temp_session.verify = False  # Allow self-signed certs
+            
             payload = {
                 "username": username,
                 "password": password
             }
             
-            response = self._session.post(
+            response = temp_session.post(
                 self._get_api_url("/auth/generate_token"),
                 json=payload,
-                timeout=30
+                timeout=10
             )
+            print(f"DEBUG: Token endpoint response status: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
@@ -158,22 +146,24 @@ class TrueNASRestClient:
                 if not self._access_token:
                     raise TrueNASAPIError("No access token in response")
                 
+                print(f"DEBUG: User '{username}' password verified successfully")
                 # Add token to headers for future requests
                 self._session.headers.update({
                     "Authorization": f"Bearer {self._access_token}"
                 })
                 return True
             elif response.status_code == 401:
-                raise TrueNASAPIError("Invalid username or password")
+                print(f"DEBUG: Auth failed - invalid credentials")
+                raise TrueNASAPIError(f"Invalid username or password")
             else:
-                raise TrueNASAPIError(
-                    f"Authentication failed: HTTP {response.status_code}: {response.text}"
-                )
-                
+                error_msg = response.text if response.text else f"HTTP {response.status_code}"
+                print(f"DEBUG: Auth failed: {error_msg}")
+                raise TrueNASAPIError(f"Invalid username or password")
         except TrueNASAPIError:
             raise
         except Exception as e:
-            raise TrueNASAPIError(f"Authentication request failed: {str(e)}")
+            print(f"DEBUG: Password verification error: {str(e)}")
+            raise TrueNASAPIError(f"Authentication failed: {str(e)}")
     
     def set_password(self, username: str, new_password: str) -> bool:
         """Change a user's password.
