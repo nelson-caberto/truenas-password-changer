@@ -3,7 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
 
 from app.forms import PasswordChangeForm
-from app.truenas_client import TrueNASAPIError
+from app.truenas_rest_client import TrueNASAPIError
 from app.utils import get_truenas_client, login_required
 
 bp = Blueprint('password', __name__)

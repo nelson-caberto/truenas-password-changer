@@ -4,7 +4,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from app import create_app
-from app.truenas_client import TrueNASAPIError
+from app.truenas_rest_client import TrueNASAPIError
 
 
 @pytest.fixture

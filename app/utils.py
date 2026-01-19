@@ -4,38 +4,23 @@ import os
 from functools import wraps
 from flask import session, flash, redirect, url_for, current_app
 
-from app.truenas_client import TrueNASClient
 from app.truenas_rest_client import TrueNASRestClient
 
 
 def get_truenas_client():
-    """Create a TrueNAS client from app configuration.
-    
-    Supports both WebSocket (legacy) and REST API (recommended) clients.
-    Configured via TRUENAS_CLIENT environment variable or config.
-    Supports both token-based and API key authentication.
+    """Create a TrueNAS REST client from app configuration.
     
     Returns:
-        Configured TrueNASClient or TrueNASRestClient instance.
+        Configured TrueNASRestClient instance.
     """
-    # Determine which client to use (default to REST API)
-    client_type = os.getenv('TRUENAS_CLIENT', 'rest').lower()
+    api_key = os.getenv('TRUENAS_API_KEY')
     
-    config = {
-        'host': current_app.config['TRUENAS_HOST'],
-        'port': current_app.config['TRUENAS_PORT'],
-        'use_ssl': current_app.config['TRUENAS_USE_SSL']
-    }
-    
-    if client_type == 'websocket':
-        return TrueNASClient(**config)
-    else:
-        # Default to REST API client
-        # Add API key if configured
-        api_key = os.getenv('TRUENAS_API_KEY')
-        if api_key:
-            config['api_key'] = api_key
-        return TrueNASRestClient(**config)
+    return TrueNASRestClient(
+        host=current_app.config['TRUENAS_HOST'],
+        port=current_app.config['TRUENAS_PORT'],
+        use_ssl=current_app.config['TRUENAS_USE_SSL'],
+        api_key=api_key
+    )
 
 
 def login_required(f):
