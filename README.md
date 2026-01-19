@@ -55,7 +55,9 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 
 The application requires a TrueNAS API key to authenticate users and change passwords.
 
-**To generate an API key:**
+> **🔒 Security Best Practice**: Create a dedicated service account instead of using your main admin account. This follows the principle of least privilege and limits potential security exposure.
+
+#### Option A: Use Existing Admin Account (Quick Start)
 
 1. Log in to your TrueNAS web interface
 2. Click on the user icon (top right) or go to **Credentials > Local Users**
@@ -65,6 +67,47 @@ The application requires a TrueNAS API key to authenticate users and change pass
 6. Give it a name (e.g., "Password Manager")
 7. Click **Save** or **Add**
 8. **Important**: Copy the API key immediately - it will only be shown once!
+
+#### Option B: Create Dedicated Service Account (Recommended)
+
+For better security, create a dedicated account with minimal privileges:
+
+1. Go to **Credentials > Local Users** → **Add**
+
+2. Configure the user:
+   | Field | Value |
+   |-------|-------|
+   | **Username** | `password-manager-service` |
+   | **Full Name** | `Password Manager Service Account` |
+   | **Email** | (optional) |
+   | **Password** | Generate a strong random password |
+   | **User ID** | (auto-generate) |
+   | **Home Directory** | `/nonexistent` |
+   | **Shell** | `nologin` |
+   | **Samba Authentication** | ❌ Disabled |
+   | **Sudo Access** | ❌ Disabled |
+
+3. After creating, edit the user and go to **Roles**:
+   - Click **Add**
+   - Select role: **SHARING_ADMIN** (allows managing user accounts)
+   - Or create a custom role with only: `ACCOUNT_READ`, `ACCOUNT_WRITE`
+
+4. Generate API Key:
+   - Scroll to **API Keys** section
+   - Click **Add**
+   - Name: `Password Manager Service`
+   - Click **Add**
+   - Copy the API key immediately
+
+5. **Disable Password Login** (optional but recommended):
+   - This account should only use API key, not password login
+   - Set **Lock User** or use a very strong random password
+
+**Why use a dedicated account?**
+- ✅ Limits blast radius if API key is compromised
+- ✅ Easier to audit (all actions by this app show as one user)
+- ✅ Can be disabled independently without affecting admin access
+- ✅ Follows principle of least privilege
 
 The API key will look something like:
 ```
