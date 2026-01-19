@@ -29,11 +29,13 @@ def client(app):
 class TestFullUserFlow:
     """Integration tests for complete user workflows."""
     
-    @patch('app.utils.TrueNASClient')
-    def test_login_change_password_logout_flow(self, mock_client_class, client):
+    @patch('app.routes.password.get_truenas_client')
+    @patch('app.routes.auth.get_truenas_client')
+    def test_login_change_password_logout_flow(self, mock_auth_client, mock_password_client, client):
         """Test complete user flow: login -> change password -> logout."""
         mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
+        mock_auth_client.return_value = mock_client
+        mock_password_client.return_value = mock_client
         
         # Step 1: Login
         response = client.post('/login', data={
@@ -69,11 +71,11 @@ class TestFullUserFlow:
         assert b'logged out' in response.data
         assert b'TrueNAS Login' in response.data
     
-    @patch('app.utils.TrueNASClient')
-    def test_failed_login_redirects_back(self, mock_client_class, client):
+    @patch('app.routes.auth.get_truenas_client')
+    def test_failed_login_redirects_back(self, mock_get_client, client):
         """Test that failed login stays on login page with error."""
         mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
         mock_client.login.side_effect = TrueNASAPIError(
             "Authentication failed",
             reason="Invalid credentials"
@@ -88,11 +90,11 @@ class TestFullUserFlow:
         assert b'Invalid credentials' in response.data
         assert b'TrueNAS Login' in response.data
     
-    @patch('app.utils.TrueNASClient')
-    def test_session_persists_across_requests(self, mock_client_class, client):
+    @patch('app.routes.auth.get_truenas_client')
+    def test_session_persists_across_requests(self, mock_get_client, client):
         """Test that session data persists across multiple requests."""
         mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
+        mock_get_client.return_value = mock_client
         
         # Login
         client.post('/login', data={
@@ -117,15 +119,19 @@ class TestFullUserFlow:
         response = client.get('/change-password', follow_redirects=True)
         assert b'Please log in' in response.data
     
-    @patch('app.utils.TrueNASClient')
-    def test_password_change_with_connection_failure(self, mock_client_class, client):
+    @patch('app.routes.password.get_truenas_client')
+    @patch('app.routes.auth.get_truenas_client')
+    def test_password_change_with_connection_failure(self, mock_auth_client, mock_password_client, client):
         """Test password change gracefully handles connection failures."""
         mock_client = MagicMock()
-        mock_client_class.return_value = mock_client
+        mock_auth_client.return_value = mock_client
+        
+        mock_client2 = MagicMock()
+        mock_password_client.return_value = mock_client2
         
         # First call succeeds (login)
         # Then subsequent calls fail (password change)
-        mock_client.connect.side_effect = [None, TrueNASAPIError("Connection refused")]
+        mock_client2.connect.side_effect = TrueNASAPIError("Connection refused")
         
         # Login first
         client.post('/login', data={
@@ -179,8 +185,13 @@ class TestEdgeCases:
         assert response.status_code == 200
         assert b'Passwords must match' in response.data
     
-    def test_wrong_current_password(self, client):
+    @patch('app.routes.password.get_truenas_client')
+    def test_wrong_current_password(self, mock_get_client, client):
         """Test entering wrong current password."""
+        mock_client = MagicMock()
+        mock_get_client.return_value = mock_client
+        mock_client.login.side_effect = TrueNASAPIError("Invalid username or password")
+        
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'
             sess['password'] = 'correctpass'
@@ -213,8 +224,7 @@ class TestEdgeCases:
         assert response.status_code == 302
         assert '/login' in response.location
     
-    @patch('app.utils.TrueNASClient')
-    def test_index_redirect_logged_in(self, mock_client_class, client):
+    def test_index_redirect_logged_in(self, client):
         """Test index redirects to password change when authenticated."""
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'

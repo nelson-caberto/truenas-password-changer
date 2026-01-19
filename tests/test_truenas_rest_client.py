@@ -45,59 +45,88 @@ class TestTrueNASRestClient:
         with pytest.raises(TrueNASAPIError):
             client.connect()
     
-    @patch('app.truenas_rest_client.requests.Session.post')
-    def test_login_success(self, mock_post):
-        """Test successful login."""
+    @patch('app.truenas_rest_client.crypt.crypt')
+    @patch('app.truenas_rest_client.requests.Session.get')
+    def test_login_success(self, mock_get, mock_crypt):
+        """Test successful login using hash verification."""
+        # Mock GET /user response
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"access_token": "test_token_12345"}
-        mock_post.return_value = mock_response
+        mock_response.json.return_value = [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": False}]
+        mock_get.return_value = mock_response
         
-        client = TrueNASRestClient(host="localhost")
+        # Mock crypt to return matching hash
+        mock_crypt.return_value = "$6$hash"
+        
+        client = TrueNASRestClient(host="localhost", api_key="test_key")
         result = client.login("admin", "password")
         
         assert result is True
-        assert client._access_token == "test_token_12345"
-        assert "Authorization" in client._session.headers
-        assert client._session.headers["Authorization"] == "Bearer test_token_12345"
     
-    @patch('app.truenas_rest_client.requests.Session.post')
-    def test_login_invalid_credentials(self, mock_post):
+    @patch('app.truenas_rest_client.crypt.crypt')
+    @patch('app.truenas_rest_client.requests.Session.get')
+    def test_login_invalid_credentials(self, mock_get, mock_crypt):
         """Test login with invalid credentials."""
         mock_response = Mock()
-        mock_response.status_code = 401
-        mock_post.return_value = mock_response
+        mock_response.status_code = 200
+        mock_response.json.return_value = [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": False}]
+        mock_get.return_value = mock_response
         
-        client = TrueNASRestClient(host="localhost")
+        # Mock crypt to return non-matching hash
+        mock_crypt.return_value = "$6$wronghash"
+        
+        client = TrueNASRestClient(host="localhost", api_key="test_key")
         with pytest.raises(TrueNASAPIError) as excinfo:
             client.login("admin", "wrongpassword")
         
         assert "Invalid username or password" in str(excinfo.value)
     
-    @patch('app.truenas_rest_client.requests.Session.post')
-    def test_login_server_error(self, mock_post):
-        """Test login with server error."""
+    @patch('app.truenas_rest_client.requests.Session.get')
+    def test_login_otp_required(self, mock_get):
+        """Test login when OTP is required."""
         mock_response = Mock()
-        mock_response.status_code = 500
-        mock_response.text = "Internal Server Error"
-        mock_post.return_value = mock_response
+        mock_response.status_code = 200
+        mock_response.json.return_value = [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": True}]
+        mock_get.return_value = mock_response
         
-        client = TrueNASRestClient(host="localhost")
+        client = TrueNASRestClient(host="localhost", api_key="test_key")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client.login("admin", "password")
+        
+        assert "OTP" in str(excinfo.value)
+    
+    @patch('app.truenas_rest_client.requests.Session.get')
+    def test_login_user_not_found(self, mock_get):
+        """Test login with non-existent user."""
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = []  # No users found
+        mock_get.return_value = mock_response
+        
+        client = TrueNASRestClient(host="localhost", api_key="test_key")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client.login("admin", "password")
+        
+        assert "Invalid username or password" in str(excinfo.value)
+    
+    @patch('app.truenas_rest_client.requests.Session.get')
+    def test_login_network_error(self, mock_get):
+        """Test login with network error."""
+        mock_get.side_effect = Exception("Connection timeout")
+        
+        client = TrueNASRestClient(host="localhost", api_key="test_key")
         with pytest.raises(TrueNASAPIError) as excinfo:
             client.login("admin", "password")
         
         assert "Authentication failed" in str(excinfo.value)
     
-    @patch('app.truenas_rest_client.requests.Session.post')
-    def test_login_network_error(self, mock_post):
-        """Test login with network error."""
-        mock_post.side_effect = Exception("Connection timeout")
-        
-        client = TrueNASRestClient(host="localhost")
+    def test_login_requires_api_key(self):
+        """Test login requires API key."""
+        client = TrueNASRestClient(host="localhost")  # No API key
         with pytest.raises(TrueNASAPIError) as excinfo:
             client.login("admin", "password")
         
-        assert "request failed" in str(excinfo.value)
+        assert "API key required" in str(excinfo.value)
     
     @patch('app.truenas_rest_client.requests.Session.get')
     @patch('app.truenas_rest_client.requests.Session.put')
@@ -199,34 +228,48 @@ class TestTrueNASRestClient:
 class TestRestClientIntegration:
     """Integration tests for REST client (mocked)."""
     
-    @patch('app.truenas_rest_client.requests.Session.get')
-    @patch('app.truenas_rest_client.requests.Session.post')
-    @patch('app.truenas_rest_client.requests.Session.put')
-    def test_full_auth_and_password_change(self, mock_put, mock_post, mock_get):
+    @patch('app.truenas_rest_client.crypt.crypt')
+    @patch('app.truenas_rest_client.requests.Session')
+    def test_full_auth_and_password_change(self, mock_session_class, mock_crypt):
         """Test full authentication and password change flow."""
-        # Setup mocks
-        mock_post_response = Mock()
-        mock_post_response.status_code = 200
-        mock_post_response.json.return_value = {"access_token": "token123"}
-        mock_post.return_value = mock_post_response
+        # Setup mock session
+        mock_session = Mock()
         
-        mock_get_response = Mock()
-        mock_get_response.status_code = 200
-        mock_get_response.json.return_value = [
+        # Mock crypt to return matching hash for login
+        mock_crypt.return_value = "$6$hash"
+        
+        # Connect response
+        mock_connect_response = Mock()
+        mock_connect_response.status_code = 200
+        
+        # GET /user response for login (hash verification)
+        mock_login_user_response = Mock()
+        mock_login_user_response.status_code = 200
+        mock_login_user_response.json.return_value = [
+            {"id": 1, "username": "testuser", "unixhash": "$6$hash", "twofactor_auth_configured": False}
+        ]
+        
+        # GET /user response for set_password
+        mock_user_response = Mock()
+        mock_user_response.status_code = 200
+        mock_user_response.json.return_value = [
             {"id": 1, "username": "testuser"}
         ]
-        mock_get.return_value = mock_get_response
         
+        # PUT /user/1 response for password change
         mock_put_response = Mock()
         mock_put_response.status_code = 200
-        mock_put.return_value = mock_put_response
         
-        # Perform operations
-        client = TrueNASRestClient(host="nas.local", port=443, use_ssl=True)
+        # Configure mock to return different responses
+        mock_session.get.side_effect = [mock_connect_response, mock_login_user_response, mock_user_response]
+        mock_session.put.return_value = mock_put_response
+        mock_session_class.return_value = mock_session
+        
+        # Perform operations - use api_key to enable set_password
+        client = TrueNASRestClient(host="nas.local", port=443, use_ssl=True, api_key="test_api_key")
         client.connect()
         
         assert client.login("testuser", "oldpass") is True
-        assert client._access_token == "token123"
         
         assert client.set_password("testuser", "newpass") is True
         

@@ -1,5 +1,6 @@
 """TrueNAS API client using REST API (alternative to WebSocket)."""
 
+import crypt
 import json
 import ssl
 from typing import Any, Optional
@@ -95,15 +96,15 @@ class TrueNASRestClient:
         self._access_token = None
     
     def login(self, username: str, password: str, otp_token: str = None) -> bool:
-        """Authenticate with TrueNAS REST API.
+        """Authenticate user by verifying password against stored hash.
         
-        Validates username and password using Basic Authentication against
-        a protected endpoint. This works regardless of API key configuration.
+        Uses the API key to fetch the user's password hash, then verifies
+        the provided password locally. This works for ALL users, not just admins.
         
         Args:
             username: TrueNAS username.
             password: TrueNAS password.
-            otp_token: Optional OTP token for 2FA (not used in REST API).
+            otp_token: Optional OTP token for 2FA (checked separately).
             
         Returns:
             True if authentication succeeded.
@@ -111,40 +112,44 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
-        import base64
+        if not self._api_key:
+            raise TrueNASAPIError("API key required for password verification")
         
         try:
-            print(f"DEBUG: Attempting to verify password for user '{username}'")
-            
-            # Create a new session for credential validation using Basic Auth
-            temp_session = requests.Session()
-            temp_session.verify = False  # Allow self-signed certs
-            
-            # Use Basic Authentication to verify credentials
-            creds = base64.b64encode(f"{username}:{password}".encode()).decode()
-            temp_session.headers.update({"Authorization": f"Basic {creds}"})
-            
-            # Try to access a simple protected endpoint
-            response = temp_session.get(
-                self._get_api_url("/system/info"),
+            # Fetch user's password hash using API key
+            response = self._session.get(
+                self._get_api_url(f"/user?username={username}"),
                 timeout=10
             )
-            print(f"DEBUG: Basic auth response status: {response.status_code}")
             
-            if response.status_code == 200:
-                print(f"DEBUG: User '{username}' password verified successfully")
+            if response.status_code != 200:
+                raise TrueNASAPIError("Failed to fetch user data")
+            
+            users = response.json()
+            if not users:
+                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
+            
+            user = users[0]
+            stored_hash = user.get("unixhash")
+            
+            if not stored_hash:
+                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
+            
+            # Check if 2FA is required
+            if user.get("twofactor_auth_configured") and not otp_token:
+                raise TrueNASAPIError("OTP token required", reason="Two-factor authentication required")
+            
+            # Verify password against stored hash
+            computed_hash = crypt.crypt(password, stored_hash)
+            
+            if computed_hash == stored_hash:
                 return True
-            elif response.status_code == 401:
-                print(f"DEBUG: Auth failed - invalid credentials")
-                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             else:
-                error_msg = response.text if response.text else f"HTTP {response.status_code}"
-                print(f"DEBUG: Auth failed: {error_msg}")
                 raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
+                
         except TrueNASAPIError:
             raise
         except Exception as e:
-            print(f"DEBUG: Password verification error: {str(e)}")
             raise TrueNASAPIError(f"Authentication failed: {str(e)}")
     
     def set_password(self, username: str, new_password: str) -> bool:
