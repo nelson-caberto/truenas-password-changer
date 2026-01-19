@@ -28,13 +28,14 @@ class TrueNASRestClient:
     full functionality.
     """
     
-    def __init__(self, host: str, port: int = 443, use_ssl: bool = True):
+    def __init__(self, host: str, port: int = 443, use_ssl: bool = True, api_key: Optional[str] = None):
         """Initialize the TrueNAS REST client.
         
         Args:
             host: TrueNAS server hostname or IP address.
             port: REST API port (default 443 for SSL, 80 for non-SSL).
             use_ssl: Whether to use SSL/TLS for the connection.
+            api_key: Optional API key for authentication. If provided, token-based auth is skipped.
         """
         self.host = host
         self.port = port
@@ -42,6 +43,13 @@ class TrueNASRestClient:
         self._session = requests.Session()
         self._session.verify = False  # Allow self-signed certificates
         self._access_token: Optional[str] = None
+        self._api_key = api_key
+        
+        # If API key is provided, use it immediately
+        if self._api_key:
+            self._session.headers.update({
+                "Authorization": f"Bearer {self._api_key}"
+            })
     
     def _get_api_url(self, endpoint: str = "") -> str:
         """Build the REST API URL.
@@ -100,6 +108,10 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
+        # If API key is configured, skip token generation and just verify connectivity
+        if self._api_key:
+            return True
+        
         try:
             payload = {
                 "username": username,
@@ -148,7 +160,7 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If password change fails.
         """
-        if not self._access_token:
+        if not self._access_token and not self._api_key:
             raise TrueNASAPIError("Not authenticated. Call login() first.")
         
         try:

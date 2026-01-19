@@ -13,6 +13,7 @@ def get_truenas_client():
     
     Supports both WebSocket (legacy) and REST API (recommended) clients.
     Configured via TRUENAS_CLIENT environment variable or config.
+    Supports both token-based and API key authentication.
     
     Returns:
         Configured TrueNASClient or TrueNASRestClient instance.
@@ -30,6 +31,10 @@ def get_truenas_client():
         return TrueNASClient(**config)
     else:
         # Default to REST API client
+        # Add API key if configured
+        api_key = os.getenv('TRUENAS_API_KEY')
+        if api_key:
+            config['api_key'] = api_key
         return TrueNASRestClient(**config)
 
 
