@@ -108,21 +108,27 @@ class TrueNASRestClient:
         Raises:
             TrueNASAPIError: If authentication fails.
         """
-        # If API key is configured, skip token generation and just verify connectivity
-        if self._api_key:
-            return True
-        
         try:
             payload = {
                 "username": username,
                 "password": password
             }
             
-            response = self._session.post(
-                self._get_api_url("/auth/generate_token"),
-                json=payload,
-                timeout=30
-            )
+            # Temporarily remove API key header for token generation if it exists
+            # (API key auth will be used for actual operations, but we still need to
+            # verify the user's credentials)
+            auth_header = self._session.headers.pop("Authorization", None)
+            
+            try:
+                response = self._session.post(
+                    self._get_api_url("/auth/generate_token"),
+                    json=payload,
+                    timeout=30
+                )
+            finally:
+                # Restore API key header if it was present
+                if auth_header:
+                    self._session.headers["Authorization"] = auth_header
             
             if response.status_code == 200:
                 data = response.json()
@@ -130,10 +136,13 @@ class TrueNASRestClient:
                 if not self._access_token:
                     raise TrueNASAPIError("No access token in response")
                 
-                # Add token to session headers for future requests
-                self._session.headers.update({
-                    "Authorization": f"Bearer {self._access_token}"
-                })
+                # If API key is NOT configured, add the token to headers for future requests
+                # If API key IS configured, we'll continue using it for actual operations
+                # but we've now verified the user's credentials
+                if not self._api_key:
+                    self._session.headers.update({
+                        "Authorization": f"Bearer {self._access_token}"
+                    })
                 return True
             elif response.status_code == 401:
                 raise TrueNASAPIError("Invalid username or password")
