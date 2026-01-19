@@ -141,197 +141,106 @@ TrueNAS SCALE restricts API authentication to users with admin roles. Regular us
 - **Limitation**: Only worked for admin users with roles
 - **Note**: If you need WebSocket support, use older commits before hash verification implementation
 
-## Running the Application
+## Deployment Options
 
-### Development Mode
+Choose the deployment method that best fits your environment:
+
+| Option | Best For | Difficulty |
+|--------|----------|------------|
+| [1. Standalone Flask](#option-1-standalone-flask-server) | Testing, simple setups | Easy |
+| [2. Apache Integration](#option-2-integrate-with-existing-apache) | Existing Apache servers | Medium |
+| [3. Nginx Integration](#option-3-integrate-with-existing-nginx) | Existing Nginx servers | Medium |
+| [4. TrueNAS App](#option-4-install-as-truenas-app) | TrueNAS SCALE users | Easy |
+
+---
+
+### Option 1: Standalone Flask Server
+
+Best for testing or simple deployments without an existing web server.
+
+#### Development Mode
 
 ```bash
+# Install dependencies
+pipenv install
+
+# Run the development server
 pipenv run python run.py
 ```
 
-The application will be available at `http://localhost:5000`
+Access at `http://localhost:5000`
 
-### Docker Deployment
-
-#### Quick Start with Docker Compose
-
-1. Copy the example environment file:
-   ```bash
-   cp .env.example .env
-   ```
-
-2. Edit `.env` with your TrueNAS details:
-   ```
-   TRUENAS_HOST=your-truenas-ip
-   TRUENAS_API_KEY=your-api-key
-   SECRET_KEY=generate-a-random-string
-   ```
-
-3. Build and run:
-   ```bash
-   docker-compose up -d
-   ```
-
-4. Access at `http://localhost:5000`
-
-#### Manual Docker Build
+#### Production Mode (Gunicorn)
 
 ```bash
-# Build the image
-docker build -t truenas-password-manager .
-
-# Run the container
-docker run -d \
-  -p 5000:5000 \
-  -e TRUENAS_HOST=your-truenas-ip \
-  -e TRUENAS_PORT=443 \
-  -e TRUENAS_USE_SSL=true \
-  -e TRUENAS_API_KEY=your-api-key \
-  -e SECRET_KEY=your-secret-key \
-  --name password-manager \
-  truenas-password-manager
-```
-
-### TrueNAS SCALE App Deployment
-
-The application includes a Helm chart for deploying as a TrueNAS SCALE custom app.
-
-#### Option 1: Custom App (Recommended)
-
-1. In TrueNAS SCALE, go to **Apps** → **Discover Apps** → **Custom App**
-
-2. Configure the app:
-   - **Application Name**: `password-manager`
-   - **Image Repository**: `ghcr.io/yourusername/truenas-password-manager`
-   - **Image Tag**: `latest`
-
-3. Add environment variables:
-   | Name | Value |
-   |------|-------|
-   | `TRUENAS_HOST` | Your TrueNAS IP (e.g., `10.0.0.100`) |
-   | `TRUENAS_PORT` | `443` |
-   | `TRUENAS_USE_SSL` | `true` |
-   | `TRUENAS_API_KEY` | Your API key |
-   | `SECRET_KEY` | Random string for sessions |
-
-4. Configure networking:
-   - **Port**: `5000`
-   - **Node Port**: Choose an available port (e.g., `30500`)
-
-5. Deploy and access at `http://your-truenas-ip:30500`
-
-#### Option 2: Helm Chart
-
-If you have a custom TrueNAS catalog or want to use Helm directly:
-
-```bash
-# Add your chart repository (if using one)
-helm repo add my-charts https://your-chart-repo
-
-# Install
-helm install password-manager ./chart \
-  --set truenas.host=your-truenas-ip \
-  --set truenas.apiKey=your-api-key
-```
-
-#### Important Notes for TrueNAS Deployment
-
-- **Use the TrueNAS host IP**, not `localhost` (the container runs in its own network)
-- **Port 445 (SMB)** must be accessible from the container to TrueNAS for SMB authentication
-- **Port 443 (API)** must be accessible for REST API calls
-- Consider using **Ingress** or a **reverse proxy** for HTTPS in production
-
-The application will be available at `http://localhost:5000`
-
-### Production Mode
-
-For production, use a WSGI server like Gunicorn:
-
-```bash
+# Install gunicorn
 pipenv install gunicorn
+
+# Run with gunicorn (4 workers)
 pipenv run gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
 ```
 
-### Reverse Proxy Configuration
+#### Auto-start with Systemd
 
-For production deployments, use a reverse proxy for HTTPS termination and security.
+Create `/etc/systemd/system/truenas-password-manager.service`:
 
-#### Nginx Configuration
+```ini
+[Unit]
+Description=TrueNAS Password Manager
+After=network.target
 
-```nginx
-server {
-    listen 80;
-    server_name password.yourdomain.com;
-    return 301 https://$server_name$request_uri;
-}
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/truenas-password-manager
+Environment="PATH=/opt/truenas-password-manager/.venv/bin"
+EnvironmentFile=/opt/truenas-password-manager/.env
+ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
+Restart=always
 
-server {
-    listen 443 ssl http2;
-    server_name password.yourdomain.com;
-
-    ssl_certificate /path/to/fullchain.pem;
-    ssl_certificate_key /path/to/privkey.pem;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
-    ssl_prefer_server_ciphers off;
-
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # Timeouts
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-}
+[Install]
+WantedBy=multi-user.target
 ```
 
-#### Apache Configuration
-
-Enable required modules:
 ```bash
+sudo systemctl daemon-reload
+sudo systemctl enable truenas-password-manager
+sudo systemctl start truenas-password-manager
+```
+
+---
+
+### Option 2: Integrate with Existing Apache
+
+If you already have Apache running, add this as a virtual host.
+
+#### Prerequisites
+
+```bash
+# Enable required modules
 sudo a2enmod proxy proxy_http ssl headers
+sudo systemctl restart apache2
 ```
 
-Virtual host configuration:
-```apache
-<VirtualHost *:80>
-    ServerName password.yourdomain.com
-    Redirect permanent / https://password.yourdomain.com/
-</VirtualHost>
+#### Step 1: Install the Application
 
-<VirtualHost *:443>
-    ServerName password.yourdomain.com
+```bash
+# Clone to /opt
+cd /opt
+git clone https://github.com/yourusername/truenas-web-password.git truenas-password-manager
+cd truenas-password-manager
 
-    SSLEngine on
-    SSLCertificateFile /path/to/fullchain.pem
-    SSLCertificateKeyFile /path/to/privkey.pem
-    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+# Create virtual environment and install
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt gunicorn
 
-    # Security headers
-    Header always set X-Frame-Options "SAMEORIGIN"
-    Header always set X-Content-Type-Options "nosniff"
-    Header always set X-XSS-Protection "1; mode=block"
-
-    ProxyPreserveHost On
-    ProxyPass / http://127.0.0.1:5000/
-    ProxyPassReverse / http://127.0.0.1:5000/
-
-    # Timeouts
-    ProxyTimeout 60
-</VirtualHost>
+# Configure
+cp .env.example .env
+nano .env  # Add your TRUENAS_HOST, TRUENAS_API_KEY, SECRET_KEY
 ```
 
-#### Systemd Service (for auto-start)
+#### Step 2: Create Systemd Service
 
 Create `/etc/systemd/system/truenas-password-manager.service`:
 
@@ -353,12 +262,228 @@ Restart=always
 WantedBy=multi-user.target
 ```
 
-Enable and start:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable truenas-password-manager
 sudo systemctl start truenas-password-manager
 ```
+
+#### Step 3: Apache Virtual Host
+
+Create `/etc/apache2/sites-available/password-manager.conf`:
+
+```apache
+<VirtualHost *:80>
+    ServerName password.yourdomain.com
+    Redirect permanent / https://password.yourdomain.com/
+</VirtualHost>
+
+<VirtualHost *:443>
+    ServerName password.yourdomain.com
+
+    SSLEngine on
+    SSLCertificateFile /etc/letsencrypt/live/password.yourdomain.com/fullchain.pem
+    SSLCertificateKeyFile /etc/letsencrypt/live/password.yourdomain.com/privkey.pem
+    SSLProtocol all -SSLv3 -TLSv1 -TLSv1.1
+
+    # Security headers
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-XSS-Protection "1; mode=block"
+
+    # Proxy to Flask app
+    ProxyPreserveHost On
+    ProxyPass / http://127.0.0.1:5000/
+    ProxyPassReverse / http://127.0.0.1:5000/
+    ProxyTimeout 60
+</VirtualHost>
+```
+
+```bash
+sudo a2ensite password-manager
+sudo systemctl reload apache2
+```
+
+---
+
+### Option 3: Integrate with Existing Nginx
+
+If you already have Nginx running, add this as a server block.
+
+#### Step 1: Install the Application
+
+```bash
+# Clone to /opt
+cd /opt
+git clone https://github.com/yourusername/truenas-web-password.git truenas-password-manager
+cd truenas-password-manager
+
+# Create virtual environment and install
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt gunicorn
+
+# Configure
+cp .env.example .env
+nano .env  # Add your TRUENAS_HOST, TRUENAS_API_KEY, SECRET_KEY
+```
+
+#### Step 2: Create Systemd Service
+
+Create `/etc/systemd/system/truenas-password-manager.service`:
+
+```ini
+[Unit]
+Description=TrueNAS Password Manager
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/truenas-password-manager
+Environment="PATH=/opt/truenas-password-manager/.venv/bin"
+EnvironmentFile=/opt/truenas-password-manager/.env
+ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable truenas-password-manager
+sudo systemctl start truenas-password-manager
+```
+
+#### Step 3: Nginx Server Block
+
+Create `/etc/nginx/sites-available/password-manager`:
+
+```nginx
+server {
+    listen 80;
+    server_name password.yourdomain.com;
+    return 301 https://$server_name$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name password.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/password.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/password.yourdomain.com/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256;
+    ssl_prefer_server_ciphers off;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+    }
+}
+```
+
+```bash
+sudo ln -s /etc/nginx/sites-available/password-manager /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+```
+
+---
+
+### Option 4: Install as TrueNAS App
+
+Deploy directly on your TrueNAS SCALE server using Docker.
+
+#### Method A: Docker Compose (Simple)
+
+1. SSH into your TrueNAS or use a dataset:
+   ```bash
+   cd /mnt/your-pool/apps/password-manager
+   ```
+
+2. Create `docker-compose.yml`:
+   ```yaml
+   version: '3.8'
+   services:
+     password-manager:
+       image: ghcr.io/yourusername/truenas-password-manager:latest
+       # Or build locally:
+       # build: .
+       ports:
+         - "5000:5000"
+       environment:
+         - TRUENAS_HOST=10.0.0.100  # Your TrueNAS IP
+         - TRUENAS_PORT=443
+         - TRUENAS_USE_SSL=true
+         - TRUENAS_API_KEY=your-api-key-here
+         - SECRET_KEY=generate-random-string
+       restart: unless-stopped
+   ```
+
+3. Run:
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access at `http://your-truenas-ip:5000`
+
+#### Method B: TrueNAS Custom App
+
+1. Go to **Apps** → **Discover Apps** → **Custom App**
+
+2. Configure:
+   | Setting | Value |
+   |---------|-------|
+   | Application Name | `password-manager` |
+   | Image Repository | `ghcr.io/yourusername/truenas-password-manager` |
+   | Image Tag | `latest` |
+
+3. Add Environment Variables:
+   | Name | Value |
+   |------|-------|
+   | `TRUENAS_HOST` | Your TrueNAS IP (NOT localhost!) |
+   | `TRUENAS_PORT` | `443` |
+   | `TRUENAS_USE_SSL` | `true` |
+   | `TRUENAS_API_KEY` | Your API key |
+   | `SECRET_KEY` | Random string |
+
+4. Configure Networking:
+   - Container Port: `5000`
+   - Node Port: `30500` (or any available)
+
+5. Deploy and access at `http://your-truenas-ip:30500`
+
+#### Method C: Helm Chart (Advanced)
+
+```bash
+helm install password-manager ./chart \
+  --set truenas.host=10.0.0.100 \
+  --set truenas.apiKey=your-api-key \
+  --set truenas.port=443
+```
+
+#### Important Notes for TrueNAS Deployment
+
+⚠️ **Use the TrueNAS host IP** (e.g., `10.0.0.100`), NOT `localhost`. The container runs in its own network namespace.
+
+⚠️ **Ensure ports are accessible** from the container:
+- Port 443 (API) - Required for REST API calls
+- Port 445 (SMB) - Required for SMB authentication (if used)
+
+---
 
 ## Running Tests
 
