@@ -1,6 +1,7 @@
 """Unit tests for Flask application factory."""
 
 import pytest
+from unittest.mock import patch
 
 from app import create_app
 
@@ -75,3 +76,68 @@ class TestCreateApp:
         
         rules = [rule.rule for rule in app.url_map.iter_rules()]
         assert '/' in rules
+
+
+class TestDotEnvLoading:
+    """Test cases for .env file loading."""
+    
+    def test_dotenv_module_imported(self):
+        """Test that dotenv is imported in app module."""
+        from app import load_dotenv
+        assert load_dotenv is not None
+    
+    def test_config_class_reads_env_variables(self):
+        """Test that Config class reads environment variables."""
+        from app.config import Config
+        
+        # Config class has env variable attributes
+        assert hasattr(Config, 'SECRET_KEY')
+        assert hasattr(Config, 'TRUENAS_HOST')
+        assert hasattr(Config, 'TRUENAS_PORT')
+        assert hasattr(Config, 'TRUENAS_USE_SSL')
+    
+    def test_config_has_defaults(self):
+        """Test that Config class has sensible defaults."""
+        from app.config import Config
+        
+        # Defaults should be set
+        assert Config.SECRET_KEY is not None
+        assert Config.TRUENAS_HOST is not None
+        assert Config.TRUENAS_PORT is not None
+        assert isinstance(Config.TRUENAS_USE_SSL, bool)
+    
+    def test_create_app_uses_defaults_when_env_not_set(self):
+        """Test that app uses default config when env variables not set."""
+        import os
+        
+        # Ensure environment variables are not set
+        os.environ.pop('TRUENAS_HOST', None)
+        os.environ.pop('TRUENAS_PORT', None)
+        os.environ.pop('TRUENAS_USE_SSL', None)
+        os.environ.pop('SECRET_KEY', None)
+        
+        app_instance = create_app()
+        
+        # Should use defaults from config
+        assert app_instance.config['TRUENAS_HOST'] == 'localhost'
+        assert app_instance.config['TRUENAS_PORT'] == 443
+        assert app_instance.config['TRUENAS_USE_SSL'] is True
+    
+    def test_config_override_takes_precedence(self):
+        """Test that config_override takes precedence over env variables."""
+        import os
+        
+        # Set environment variables
+        os.environ['TRUENAS_HOST'] = 'env-host.local'
+        
+        try:
+            app_instance = create_app({
+                'TRUENAS_HOST': 'override-host.local',
+            })
+            
+            # Override should take precedence
+            assert app_instance.config['TRUENAS_HOST'] == 'override-host.local'
+        
+        finally:
+            os.environ.pop('TRUENAS_HOST', None)
+
