@@ -79,6 +79,11 @@ class TrueNASClient:
                 
         except websocket.WebSocketException as e:
             raise TrueNASAPIError(f"WebSocket connection failed: {str(e)}")
+        except TypeError as e:
+            # Handle SSL option type errors (common with older websocket-client versions)
+            if "cert_reqs" in str(e):
+                raise TrueNASAPIError(f"SSL configuration error: {str(e)}. Please upgrade websocket-client.")
+            raise TrueNASAPIError(f"Type error: {str(e)}")
         except json.JSONDecodeError as e:
             raise TrueNASAPIError(f"Invalid response from TrueNAS: {str(e)}")
         except Exception as e:
@@ -122,6 +127,14 @@ class TrueNASClient:
         try:
             self._ws.send(json.dumps(request))
             response = self._ws.recv()
+            
+            if not response:
+                # Empty response indicates server may have closed connection
+                raise TrueNASAPIError(
+                    "Empty response from TrueNAS. The server may have rejected the request. "
+                    "Check TrueNAS logs and ensure credentials are correct."
+                )
+            
             data = json.loads(response)
             
             if "error" in data:

@@ -43,12 +43,8 @@ def login():
             
         except TrueNASAPIError as e:
             flash(f'Login failed: {e.reason or e.message}', 'error')
-            import sys
-            print(f'Connection attempt to {client._get_ws_url()}', file=sys.stderr)
         except Exception as e:
             flash(f'Connection error: {str(e)}', 'error')
-            import sys
-            print(f'Connection attempt to {client._get_ws_url()}: {str(e)}', file=sys.stderr)
         finally:
             client.disconnect()
     
