@@ -1,4 +1,4 @@
-# Default values for truenas-password-manager
+# Default values for truenas-password-changer
 # This is a YAML-formatted file.
 
 # -- Number of replicas
@@ -6,7 +6,7 @@ replicaCount: 1
 
 image:
   # -- Image repository
-  repository: ghcr.io/yourusername/truenas-password-manager
+  repository: ghcr.io/yourusername/truenas-password-changer
   # -- Image pull policy
   pullPolicy: IfNotPresent
   # -- Image tag (defaults to chart appVersion)
@@ -95,4 +95,4 @@ portal:
   # -- Enable portal link in TrueNAS UI
   enabled: true
   # -- Portal name shown in TrueNAS
-  name: "Password Manager"
+  name: "Password Changer"

@@ -1,4 +1,4 @@
-# TrueNAS Password Manager
+# TrueNAS Password Changer
 
 A simple Flask web application that allows TrueNAS users to change their own passwords through a web interface.
 
@@ -64,7 +64,7 @@ The application requires a TrueNAS API key to authenticate users and change pass
 3. Click on your admin user (e.g., `truenas_admin` or `admin`)
 4. Scroll down to the **API Keys** section
 5. Click **Add** to create a new API key
-6. Give it a name (e.g., "Password Manager")
+6. Give it a name (e.g., "Password Changer")
 7. Click **Save** or **Add**
 8. **Important**: Copy the API key immediately - it will only be shown once!
 
@@ -77,8 +77,8 @@ For better security, create a dedicated account with minimal privileges:
 2. Configure the user:
    | Field | Value |
    |-------|-------|
-   | **Username** | `password-manager-service` |
-   | **Full Name** | `Password Manager Service Account` |
+   | **Username** | `password-changer-service` |
+   | **Full Name** | `Password Changer Service Account` |
    | **Email** | (optional) |
    | **Password** | Generate a strong random password |
    | **User ID** | (auto-generate) |
@@ -95,7 +95,7 @@ For better security, create a dedicated account with minimal privileges:
 4. Generate API Key:
    - Scroll to **API Keys** section
    - Click **Add**
-   - Name: `Password Manager Service`
+   - Name: `Password Changer Service`
    - Click **Add**
    - Copy the API key immediately
 
@@ -225,20 +225,20 @@ pipenv run gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
 
 #### Auto-start with Systemd
 
-Create `/etc/systemd/system/truenas-password-manager.service`:
+Create `/etc/systemd/system/truenas-password-changer.service`:
 
 ```ini
 [Unit]
-Description=TrueNAS Password Manager
+Description=TrueNAS Password Changer
 After=network.target
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/truenas-password-manager
-Environment="PATH=/opt/truenas-password-manager/.venv/bin"
-EnvironmentFile=/opt/truenas-password-manager/.env
-ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
+WorkingDirectory=/opt/truenas-password-changer
+Environment="PATH=/opt/truenas-password-changer/.venv/bin"
+EnvironmentFile=/opt/truenas-password-changer/.env
+ExecStart=/opt/truenas-password-changer/.venv/bin/gunicorn -w 4 -b 0.0.0.0:5000 'app:create_app()'
 Restart=always
 
 [Install]
@@ -247,8 +247,8 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable truenas-password-manager
-sudo systemctl start truenas-password-manager
+sudo systemctl enable truenas-password-changer
+sudo systemctl start truenas-password-changer
 ```
 
 ---
@@ -270,8 +270,8 @@ sudo systemctl restart apache2
 ```bash
 # Clone to /opt
 cd /opt
-git clone https://github.com/yourusername/truenas-web-password.git truenas-password-manager
-cd truenas-password-manager
+git clone https://github.com/yourusername/truenas-web-password.git truenas-password-changer
+cd truenas-password-changer
 
 # Create virtual environment and install
 python3 -m venv .venv
@@ -285,20 +285,20 @@ nano .env  # Add your TRUENAS_HOST, TRUENAS_API_KEY, SECRET_KEY
 
 #### Step 2: Create Systemd Service
 
-Create `/etc/systemd/system/truenas-password-manager.service`:
+Create `/etc/systemd/system/truenas-password-changer.service`:
 
 ```ini
 [Unit]
-Description=TrueNAS Password Manager
+Description=TrueNAS Password Changer
 After=network.target
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/truenas-password-manager
-Environment="PATH=/opt/truenas-password-manager/.venv/bin"
-EnvironmentFile=/opt/truenas-password-manager/.env
-ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
+WorkingDirectory=/opt/truenas-password-changer
+Environment="PATH=/opt/truenas-password-changer/.venv/bin"
+EnvironmentFile=/opt/truenas-password-changer/.env
+ExecStart=/opt/truenas-password-changer/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
 Restart=always
 
 [Install]
@@ -307,13 +307,13 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable truenas-password-manager
-sudo systemctl start truenas-password-manager
+sudo systemctl enable truenas-password-changer
+sudo systemctl start truenas-password-changer
 ```
 
 #### Step 3: Apache Virtual Host
 
-Create `/etc/apache2/sites-available/password-manager.conf`:
+Create `/etc/apache2/sites-available/password-changer.conf`:
 
 ```apache
 <VirtualHost *:80>
@@ -343,7 +343,7 @@ Create `/etc/apache2/sites-available/password-manager.conf`:
 ```
 
 ```bash
-sudo a2ensite password-manager
+sudo a2ensite password-changer
 sudo systemctl reload apache2
 ```
 
@@ -358,8 +358,8 @@ If you already have Nginx running, add this as a server block.
 ```bash
 # Clone to /opt
 cd /opt
-git clone https://github.com/yourusername/truenas-web-password.git truenas-password-manager
-cd truenas-password-manager
+git clone https://github.com/yourusername/truenas-web-password.git truenas-password-changer
+cd truenas-password-changer
 
 # Create virtual environment and install
 python3 -m venv .venv
@@ -373,20 +373,20 @@ nano .env  # Add your TRUENAS_HOST, TRUENAS_API_KEY, SECRET_KEY
 
 #### Step 2: Create Systemd Service
 
-Create `/etc/systemd/system/truenas-password-manager.service`:
+Create `/etc/systemd/system/truenas-password-changer.service`:
 
 ```ini
 [Unit]
-Description=TrueNAS Password Manager
+Description=TrueNAS Password Changer
 After=network.target
 
 [Service]
 User=www-data
 Group=www-data
-WorkingDirectory=/opt/truenas-password-manager
-Environment="PATH=/opt/truenas-password-manager/.venv/bin"
-EnvironmentFile=/opt/truenas-password-manager/.env
-ExecStart=/opt/truenas-password-manager/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
+WorkingDirectory=/opt/truenas-password-changer
+Environment="PATH=/opt/truenas-password-changer/.venv/bin"
+EnvironmentFile=/opt/truenas-password-changer/.env
+ExecStart=/opt/truenas-password-changer/.venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 'app:create_app()'
 Restart=always
 
 [Install]
@@ -395,13 +395,13 @@ WantedBy=multi-user.target
 
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable truenas-password-manager
-sudo systemctl start truenas-password-manager
+sudo systemctl enable truenas-password-changer
+sudo systemctl start truenas-password-changer
 ```
 
 #### Step 3: Nginx Server Block
 
-Create `/etc/nginx/sites-available/password-manager`:
+Create `/etc/nginx/sites-available/password-changer`:
 
 ```nginx
 server {
@@ -439,7 +439,7 @@ server {
 ```
 
 ```bash
-sudo ln -s /etc/nginx/sites-available/password-manager /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/password-changer /etc/nginx/sites-enabled/
 sudo nginx -t
 sudo systemctl reload nginx
 ```
@@ -454,15 +454,15 @@ Deploy directly on your TrueNAS SCALE server using Docker.
 
 1. SSH into your TrueNAS or use a dataset:
    ```bash
-   cd /mnt/your-pool/apps/password-manager
+   cd /mnt/your-pool/apps/password-changer
    ```
 
 2. Create `docker-compose.yml`:
    ```yaml
    version: '3.8'
    services:
-     password-manager:
-       image: ghcr.io/yourusername/truenas-password-manager:latest
+     password-changer:
+       image: ghcr.io/yourusername/truenas-password-changer:latest
        # Or build locally:
        # build: .
        ports:
@@ -490,8 +490,8 @@ Deploy directly on your TrueNAS SCALE server using Docker.
 2. Configure:
    | Setting | Value |
    |---------|-------|
-   | Application Name | `password-manager` |
-   | Image Repository | `ghcr.io/yourusername/truenas-password-manager` |
+   | Application Name | `password-changer` |
+   | Image Repository | `ghcr.io/yourusername/truenas-password-changer` |
    | Image Tag | `latest` |
 
 3. Add Environment Variables:
@@ -512,7 +512,7 @@ Deploy directly on your TrueNAS SCALE server using Docker.
 #### Method C: Helm Chart (Advanced)
 
 ```bash
-helm install password-manager ./chart \
+helm install password-changer ./chart \
   --set truenas.host=10.0.0.100 \
   --set truenas.apiKey=your-api-key \
   --set truenas.port=443

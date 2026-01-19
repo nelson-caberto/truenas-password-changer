@@ -1,18 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "truenas-password-manager.fullname" . }}
+  name: {{ include "truenas-password-changer.fullname" . }}
   labels:
-    {{- include "truenas-password-manager.labels" . | nindent 4 }}
+    {{- include "truenas-password-changer.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "truenas-password-manager.selectorLabels" . | nindent 6 }}
+      {{- include "truenas-password-changer.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        {{- include "truenas-password-manager.selectorLabels" . | nindent 8 }}
+        {{- include "truenas-password-changer.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -40,12 +40,12 @@ spec:
             - name: TRUENAS_API_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "truenas-password-manager.fullname" . }}-secret
+                  name: {{ include "truenas-password-changer.fullname" . }}-secret
                   key: api-key
             - name: SECRET_KEY
               valueFrom:
                 secretKeyRef:
-                  name: {{ include "truenas-password-manager.fullname" . }}-secret
+                  name: {{ include "truenas-password-changer.fullname" . }}-secret
                   key: flask-secret
             - name: FLASK_ENV
               value: {{ .Values.flask.env | quote }}

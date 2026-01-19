@@ -1,5 +1,5 @@
 apiVersion: v2
-name: truenas-password-manager
+name: truenas-password-changer
 description: Self-service password change portal for TrueNAS local users
 type: application
 version: 1.0.0

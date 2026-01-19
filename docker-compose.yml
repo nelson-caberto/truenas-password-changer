@@ -1,9 +1,9 @@
 version: '3.8'
 
 services:
-  truenas-password-manager:
+  truenas-password-changer:
     build: .
-    container_name: truenas-password-manager
+    container_name: truenas-password-changer
     ports:
       - "5000:5000"
     environment:

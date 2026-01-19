@@ -1,6 +1,6 @@
 FROM python:3.12-slim
 
-LABEL maintainer="TrueNAS Password Manager"
+LABEL maintainer="TrueNAS Password Changer"
 LABEL description="Self-service password change portal for TrueNAS users"
 
 # Set working directory
