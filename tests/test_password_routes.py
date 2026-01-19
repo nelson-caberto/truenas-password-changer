@@ -31,7 +31,6 @@ def logged_in_client(client):
     """Create a test client with an authenticated session."""
     with client.session_transaction() as sess:
         sess['username'] = 'testuser'
-        sess['password'] = 'currentpass123'
     return client
 
 

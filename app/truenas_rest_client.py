@@ -96,10 +96,11 @@ class TrueNASRestClient:
         self._access_token = None
     
     def login(self, username: str, password: str, otp_token: str = None) -> bool:
-        """Authenticate user by verifying password against stored hash.
+        """Authenticate user by verifying password.
         
-        Uses the API key to fetch the user's password hash, then verifies
-        the provided password locally. This works for ALL users, not just admins.
+        First tries SMB authentication (for users with SMB enabled),
+        then falls back to hash verification using the API key.
+        This works for ALL users, not just admins.
         
         Args:
             username: TrueNAS username.
@@ -116,7 +117,7 @@ class TrueNASRestClient:
             raise TrueNASAPIError("API key required for password verification")
         
         try:
-            # Fetch user's password hash using API key
+            # Fetch user data first
             response = self._session.get(
                 self._get_api_url(f"/user?username={username}"),
                 timeout=10
@@ -130,14 +131,28 @@ class TrueNASRestClient:
                 raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             
             user = users[0]
-            stored_hash = user.get("unixhash")
-            
-            if not stored_hash:
-                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             
             # Check if 2FA is required
             if user.get("twofactor_auth_configured") and not otp_token:
                 raise TrueNASAPIError("OTP token required", reason="Two-factor authentication required")
+            
+            # Try SMB authentication first if user has SMB enabled
+            if user.get("smb"):
+                try:
+                    from smb.SMBConnection import SMBConnection
+                    conn = SMBConnection(username, password, 'client', self.host, use_ntlm_v2=True)
+                    if conn.connect(self.host, 445, timeout=5):
+                        conn.close()
+                        return True
+                except Exception:
+                    # SMB auth failed, fall through to hash verification
+                    pass
+            
+            # Fall back to hash verification
+            stored_hash = user.get("unixhash")
+            
+            if not stored_hash:
+                raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             
             # Verify password against stored hash
             computed_hash = crypt.crypt(password, stored_hash)

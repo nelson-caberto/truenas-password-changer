@@ -1,12 +1,14 @@
 # TrueNAS WebSocket API Diagnosis
 
+> **⚠️ HISTORICAL DOCUMENT** - This document describes issues encountered during initial development. The application now uses **hash-based authentication with SMB fallback**, which works for ALL users regardless of admin roles. WebSocket authentication is no longer used.
+
 ## Summary
 
 The Flask application is fully functional and production-ready, but encounters an issue when attempting WebSocket JSON-RPC authentication with TrueNAS 25.10.1.
 
 ## Issue
 
-When sending `auth.login` JSON-RPC 2.0 requests via WebSocket to `wss://fractals:443/websocket`, the TrueNAS server responds with WebSocket close frame (opcode 0x88) with:
+When sending `auth.login` JSON-RPC 2.0 requests via WebSocket to `wss://<truenas-host>:443/websocket`, the TrueNAS server responds with WebSocket close frame (opcode 0x88) with:
 - **Status Code:** 1011 (Server Error)
 - **Reason:** `'msg'` (appears to be a parsing error)
 
@@ -16,7 +18,7 @@ When sending `auth.login` JSON-RPC 2.0 requests via WebSocket to `wss://fractals
 ✅ **Network Connectivity**
 - TCP port 443 is accessible (confirmed via `nc`)
 - HTTPS endpoint responds correctly (HTTP/1.1 302 redirect)
-- DNS resolution works (fractals → 10.0.0.229)
+- DNS resolution works (<hostname> → <ip-address>)
 
 ✅ **TrueNAS Service**
 - Middleware service (`middlewared`) is running and active
@@ -95,8 +97,8 @@ When sending `auth.login` JSON-RPC 2.0 requests via WebSocket to `wss://fractals
 
 2. **Test REST API authentication:**
    ```bash
-   curl -k -X POST https://fractals/api/v2.0/core/get_license \
-     -H "Authorization: Bearer $(curl -k -X POST https://fractals/api/v2.0/auth/generate_token \
+   curl -k -X POST https://<truenas-host>/api/v2.0/core/get_license \
+     -H "Authorization: Bearer $(curl -k -X POST https://<truenas-host>/api/v2.0/auth/generate_token \
        -d '{"username":"admin","password":"password"}' \
        -H "Content-Type: application/json" | jq -r .access_token)"
    ```

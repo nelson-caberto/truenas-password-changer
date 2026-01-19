@@ -32,9 +32,8 @@ def login():
             client.connect()
             client.login(username, password)
             
-            # Store user info in session
+            # Store username in session (password not stored for security)
             session['username'] = username
-            session['password'] = password  # Needed for password change verification
             
             client.disconnect()
             

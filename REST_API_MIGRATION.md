@@ -1,5 +1,7 @@
 # WebSocket vs REST API Implementation
 
+> **⚠️ HISTORICAL DOCUMENT** - This document describes the initial migration from WebSocket to REST API. The application has since evolved to use **hash-based authentication with SMB fallback**, which works for ALL users (not just admins). See the main README for current implementation details.
+
 ## Issue Summary
 
 The original WebSocket JSON-RPC implementation encounters server-side errors when attempting to authenticate. The TrueNAS middleware closes the WebSocket connection with status code 1011 (Server Error) and message `'msg'`, indicating a parsing error.
@@ -61,7 +63,7 @@ If TrueNAS middleware issue is resolved:
 
 ### Methods
 ```python
-client = TrueNASRestClient(host="fractals", port=443, use_ssl=True)
+client = TrueNASRestClient(host="your-truenas-host", port=443, use_ssl=True)
 client.connect()  # Verifies connectivity
 client.login(username, password)  # Gets access token
 client.set_password(username, new_password)  # Changes password

@@ -9,6 +9,7 @@ websocket-client = "*"
 wtforms = "*"
 python-dotenv = "*"
 requests = "*"
+pysmb = "*"
 
 [dev-packages]
 pytest = "*"

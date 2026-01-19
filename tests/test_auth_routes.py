@@ -134,7 +134,8 @@ class TestLoginRoute:
             
             from flask import session
             assert session['username'] == 'testuser'
-            assert session['password'] == 'testpass123'
+            # Password should NOT be stored in session for security
+            assert 'password' not in session
 
 
 class TestLogoutRoute:
@@ -144,7 +145,6 @@ class TestLogoutRoute:
         """Test logout clears session and redirects to login."""
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'
-            sess['password'] = 'testpass123'
         
         response = client.get('/logout')
         

@@ -159,7 +159,6 @@ class TestEdgeCases:
         # Set up session
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'
-            sess['password'] = 'currentpass'
         
         response = client.post('/change-password', data={
             'current_password': '',
@@ -174,7 +173,6 @@ class TestEdgeCases:
         """Test password confirmation mismatch."""
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'
-            sess['password'] = 'currentpass'
         
         response = client.post('/change-password', data={
             'current_password': 'currentpass',
@@ -194,7 +192,6 @@ class TestEdgeCases:
         
         with client.session_transaction() as sess:
             sess['username'] = 'testuser'
-            sess['password'] = 'correctpass'
         
         response = client.post('/change-password', data={
             'current_password': 'wrongpass',
