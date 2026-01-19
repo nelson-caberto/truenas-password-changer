@@ -20,34 +20,27 @@ def change():
         current_password = form.current_password.data
         new_password = form.new_password.data
         
-        # When using API key auth, we trust that login already verified the user exists
-        # For additional security, password changes still require entering current password
-        # but with API key auth, we skip the credential verification (API key proves admin access)
-        
         client = get_truenas_client()
         
         try:
             client.connect()
-            # With API key auth, don't verify credentials again (API key proves access)
-            # Just proceed with password change
-            # With token auth, this would verify credentials
+            # Try to login with current credentials to verify them
             try:
                 client.login(username, current_password)
             except TrueNASAPIError as e:
-                # If login fails, it might be because we're using API key auth
-                # In that case, just proceed with password change
-                if "not found" not in str(e).lower() and "401" not in str(e):
+                # If login fails but not due to wrong credentials, proceed with API key auth
+                if "not found" not in str(e).lower() and "Invalid" not in str(e):
+                    pass
+                else:
                     raise
             
             client.set_password(username, new_password)
-            
-            # Update session with new password
-            session['password'] = new_password
-            
             client.disconnect()
             
-            flash('Password changed successfully!', 'success')
-            return redirect(url_for('password.change'))
+            # Password changed successfully - log out user for security
+            session.clear()
+            flash('Password changed successfully! Please log in with your new password.', 'success')
+            return redirect(url_for('auth.login'))
             
         except TrueNASAPIError as e:
             if "Invalid username or password" in str(e) or "not found" in str(e).lower():

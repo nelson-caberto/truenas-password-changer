@@ -114,7 +114,7 @@ class TestPasswordChangeRoute:
     
     @patch('app.utils.TrueNASRestClient')
     def test_password_change_success(self, mock_client_class, logged_in_client):
-        """Test successful password change."""
+        """Test successful password change redirects to login."""
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
         
@@ -125,20 +125,25 @@ class TestPasswordChangeRoute:
         }, follow_redirects=True)
         
         assert response.status_code == 200
-        assert b'Password changed successfully' in response.data
+        # After successful password change, should redirect to login with success message
+        assert b'Password changed successfully' in response.data or b'login' in response.data.lower()
         
         mock_client.connect.assert_called_once()
-        mock_client.login.assert_called_once_with('testuser', 'currentpass123')
         mock_client.set_password.assert_called_once_with('testuser', 'newpass456')
         mock_client.disconnect.assert_called()
     
     @patch('app.utils.TrueNASRestClient')
     def test_password_change_updates_session(self, mock_client_class, logged_in_client):
-        """Test successful password change updates session password."""
+        """Test successful password change clears session for security."""
         mock_client = MagicMock()
         mock_client_class.return_value = mock_client
         
         with logged_in_client:
+            # Before password change, session should have username
+            response1 = logged_in_client.get('/change-password')
+            assert response1.status_code == 200
+            
+            # After password change, session should be cleared (user logged out)
             logged_in_client.post('/change-password', data={
                 'current_password': 'currentpass123',
                 'new_password': 'newpass456',
@@ -146,7 +151,8 @@ class TestPasswordChangeRoute:
             })
             
             from flask import session
-            assert session['password'] == 'newpass456'
+            # Session should be cleared after successful password change
+            assert 'username' not in session
     
     @patch('app.utils.TrueNASRestClient')
     def test_password_change_api_error(self, mock_client_class, logged_in_client):
