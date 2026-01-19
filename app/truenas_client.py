@@ -65,23 +65,24 @@ class TrueNASClient:
                 # Allow self-signed certificates (common in TrueNAS setups)
                 ssl_opts = {"cert_reqs": ssl.CERT_NONE}
             
+            url = self._get_ws_url()
             self._ws = websocket.create_connection(
-                self._get_ws_url(),
+                url,
                 sslopt=ssl_opts,
                 timeout=30
             )
             
-            # TrueNAS sends a connect message first
-            response = self._ws.recv()
-            data = json.loads(response)
-            
-            if data.get("msg") != "connected":
+            # TrueNAS 25.x doesn't send a connect message, so we skip expecting it
+            # Just verify the connection is open
+            if not self._ws.connected:
                 raise TrueNASAPIError("Failed to establish connection with TrueNAS")
                 
         except websocket.WebSocketException as e:
             raise TrueNASAPIError(f"WebSocket connection failed: {str(e)}")
         except json.JSONDecodeError as e:
             raise TrueNASAPIError(f"Invalid response from TrueNAS: {str(e)}")
+        except Exception as e:
+            raise TrueNASAPIError(f"Connection error: {type(e).__name__}: {str(e)}")
     
     def disconnect(self) -> None:
         """Close the WebSocket connection."""
