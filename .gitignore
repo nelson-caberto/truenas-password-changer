@@ -22,6 +22,7 @@ ENV/
 .coverage
 htmlcov/
 .tox/
+coverage.xml
 
 # Flask
 instance/
