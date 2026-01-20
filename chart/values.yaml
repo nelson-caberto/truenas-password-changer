@@ -1,0 +1,98 @@
+# Default values for truenas-password-changer
+# This is a YAML-formatted file.
+
+# -- Number of replicas
+replicaCount: 1
+
+image:
+  # -- Image repository
+  repository: ghcr.io/yourusername/truenas-password-changer
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+  # -- Image tag (defaults to chart appVersion)
+  tag: ""
+
+# -- Image pull secrets
+imagePullSecrets: []
+
+# -- Override name
+nameOverride: ""
+
+# -- Override full name
+fullnameOverride: ""
+
+# TrueNAS connection settings
+truenas:
+  # -- TrueNAS server hostname or IP (use host IP, not localhost)
+  host: ""
+  # -- TrueNAS API port
+  port: 443
+  # -- Use SSL/TLS for connection
+  useSSL: true
+  # -- TrueNAS API key (required - generate in TrueNAS UI)
+  apiKey: ""
+
+# Flask application settings
+flask:
+  # -- Flask secret key for session encryption (auto-generated if empty)
+  secretKey: ""
+  # -- Flask environment
+  env: production
+
+service:
+  # -- Service type
+  type: ClusterIP
+  # -- Service port
+  port: 5000
+
+ingress:
+  # -- Enable ingress
+  enabled: false
+  # -- Ingress class name
+  className: ""
+  # -- Ingress annotations
+  annotations: {}
+  # -- Ingress hosts
+  hosts:
+    - host: password.local
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- Ingress TLS configuration
+  tls: []
+
+# -- Resource limits and requests
+resources:
+  limits:
+    cpu: 200m
+    memory: 256Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+# -- Pod security context
+podSecurityContext:
+  fsGroup: 1000
+
+# -- Container security context
+securityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+
+# -- Node selector
+nodeSelector: {}
+
+# -- Tolerations
+tolerations: []
+
+# -- Affinity rules
+affinity: {}
+
+# Portal configuration for TrueNAS UI
+portal:
+  # -- Enable portal link in TrueNAS UI
+  enabled: true
+  # -- Portal name shown in TrueNAS
+  name: "Password Changer"

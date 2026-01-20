@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  truenas-password-changer:
+    build: .
+    container_name: truenas-password-changer
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - TRUENAS_HOST=${TRUENAS_HOST:-your-truenas-host}
+      - TRUENAS_PORT=${TRUENAS_PORT:-443}
+      - TRUENAS_USE_SSL=${TRUENAS_USE_SSL:-true}
+      - TRUENAS_API_KEY=${TRUENAS_API_KEY}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/login')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+# To use:
+# 1. Copy .env.example to .env and fill in values
+# 2. Run: docker-compose up -d
+# 3. Access: http://localhost:5000
