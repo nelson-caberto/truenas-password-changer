@@ -188,16 +188,18 @@ TrueNAS SCALE restricts API authentication to users with admin roles. Regular us
 
 Choose the deployment method that best fits your environment:
 
-| Option | Best For | Difficulty |
-|--------|----------|------------|
-| [1. Standalone Flask](#option-1-standalone-flask-server) | Testing, simple setups | Easy |
-| [2. Apache Integration](#option-2-integrate-with-existing-apache) | Existing Apache servers | Medium |
-| [3. Nginx Integration](#option-3-integrate-with-existing-nginx) | Existing Nginx servers | Medium |
-| [4. TrueNAS App](#option-4-install-as-truenas-app) | TrueNAS SCALE users | Easy |
+| Option | Best For | Difficulty | Status |
+|--------|----------|------------|--------|
+| [1. Standalone Flask](#option-1-standalone-flask-server) | Testing, simple setups | Easy | ✅ **Tested** |
+| [2. Apache Integration](#option-2-integrate-with-existing-apache) | Existing Apache servers | Medium | ⚠️ Untested |
+| [3. Nginx Integration](#option-3-integrate-with-existing-nginx) | Existing Nginx servers | Medium | ⚠️ Untested |
+| [4. TrueNAS App](#option-4-install-as-truenas-app) | TrueNAS SCALE users | Easy | ⚠️ Untested |
 
 ---
 
 ### Option 1: Standalone Flask Server
+
+✅ **Tested and verified**
 
 Best for testing or simple deployments without an existing web server.
 
@@ -254,6 +256,8 @@ sudo systemctl start truenas-password-changer
 ---
 
 ### Option 2: Integrate with Existing Apache
+
+⚠️ **Untested - provided as reference configuration**
 
 If you already have Apache running, add this as a virtual host.
 
@@ -351,6 +355,8 @@ sudo systemctl reload apache2
 
 ### Option 3: Integrate with Existing Nginx
 
+⚠️ **Untested - provided as reference configuration**
+
 If you already have Nginx running, add this as a server block.
 
 #### Step 1: Install the Application
@@ -447,6 +453,8 @@ sudo systemctl reload nginx
 ---
 
 ### Option 4: Install as TrueNAS App
+
+⚠️ **Untested - provided as reference configuration**
 
 Deploy directly on your TrueNAS SCALE server using Docker.
 
