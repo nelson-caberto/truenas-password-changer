@@ -11,20 +11,23 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 - Self-service password change
 - Simple, clean web interface
 - No password requirements enforced (TrueNAS handles validation)
-- REST API based (efficient and reliable)
-- Comprehensive testing (104 tests, 95%+ coverage)
+- **WebSocket JSON-RPC 2.0 API** (TrueNAS 26.04+ compatible)
+- Comprehensive testing (84 tests, 95%+ coverage)
 
 ## Compatibility
 
 **Developed and Tested For:**
 - **TrueNAS SCALE 25.10.1** (primary target)
-- TrueNAS API v2.0
+- **TrueNAS SCALE 26.04+** (ready for WebSocket-only API)
+- WebSocket JSON-RPC 2.0 API
 
 **Expected to work with:**
 - TrueNAS SCALE 24.x and newer
-- Any TrueNAS version with REST API v2.0 support
+- TrueNAS SCALE 26.04+ (REST API removed, WebSocket required)
 
-**Note:** The application uses standard Unix authentication mechanisms (SMB and password hashes) that are platform-independent. While developed on SCALE 25.10.1, it should work with most TrueNAS SCALE and potentially TrueNAS CORE versions that support the REST API v2.0.
+**Note:** This application uses the WebSocket JSON-RPC 2.0 API, which is the only supported API in TrueNAS 26.04+. The deprecated REST API was removed in that release. Authentication uses standard Unix mechanisms (SMB and password hashes) that are platform-independent.
+
+**⚠️ Migration Notice:** If upgrading from an older version of this app that used the REST API, simply update to this version - no configuration changes needed. The WebSocket API uses the same ports and API keys.
 
 ## Requirements
 
@@ -156,8 +159,9 @@ The application uses a **dual authentication approach** that works for ALL TrueN
    - Fast and direct verification
    - Works for users with SMB access enabled
 3. **Fallback Method - Hash Verification** (if SMB fails or unavailable):
-   - Fetches user's Unix password hash using the API key
-   - Verifies password locally using Python's `crypt` module
+   - Fetches user's Unix password hash via WebSocket API using the API key
+   - Verifies password locally using `passlib` library
+   - Supports SHA-512, SHA-256, and MD5 hash formats
    - Works for ALL users regardless of admin status or SMB access
 
 ### Why This Approach?
@@ -170,19 +174,20 @@ TrueNAS SCALE restricts API authentication to users with admin roles. Regular us
 
 ## API Client Selection
 
-### REST API (Used)
+### WebSocket JSON-RPC 2.0 (Current)
 - **Status**: ✅ Fully functional and tested
+- **Why WebSocket**: TrueNAS deprecated the REST API and removed it in version 26.04
 - **Advantages**:
-  - Standard HTTP protocol
-  - Better error handling
+  - Future-proof (required for TrueNAS 26.04+)
+  - Native JSON-RPC 2.0 protocol
   - Token-based authentication with API key
-  - Well-documented in TrueNAS
   - Works with hash verification method
+- **Documentation**: https://api.truenas.com/v25.10/jsonrpc.html
 
-### WebSocket JSON-RPC (Legacy/Removed)
-- **Status**: ⚠️ Previously supported but removed
-- **Limitation**: Only worked for admin users with roles
-- **Note**: If you need WebSocket support, use older commits before hash verification implementation
+### REST API (Deprecated/Removed)
+- **Status**: ❌ Removed from this application
+- **Reason**: TrueNAS removed REST API support in version 26.04
+- **Note**: If you need REST API support for older TrueNAS versions, use commits before the WebSocket migration
 
 ## Deployment Options
 
@@ -531,7 +536,7 @@ helm install password-changer ./chart \
 ⚠️ **Use the TrueNAS host IP** (e.g., `10.0.0.100`), NOT `localhost`. The container runs in its own network namespace.
 
 ⚠️ **Ensure ports are accessible** from the container:
-- Port 443 (API) - Required for REST API calls
+- Port 443 (WebSocket API) - Required for WebSocket JSON-RPC calls
 - Port 445 (SMB) - Required for SMB authentication (if used)
 
 ---
@@ -549,7 +554,7 @@ pipenv run pytest -v
 ```
 
 Current test results:
-- **104 tests** (all passing)
+- **84 tests** (all passing)
 - **95%+ code coverage**
 - Comprehensive unit and integration tests
 
@@ -561,7 +566,7 @@ truenas-web-password/
 │   ├── __init__.py              # Flask application factory
 │   ├── config.py                 # Configuration classes
 │   ├── forms.py                  # WTForms form definitions
-│   ├── truenas_rest_client.py    # TrueNAS REST API client with dual auth
+│   ├── truenas_websocket_client.py  # TrueNAS WebSocket JSON-RPC 2.0 client
 │   ├── utils.py                  # Shared utility functions
 │   ├── routes/
 │   │   ├── __init__.py
@@ -579,7 +584,7 @@ truenas-web-password/
 │   ├── test_forms.py             # Form validation tests
 │   ├── test_integration.py       # Full user flow integration tests
 │   ├── test_password_routes.py   # Password change route tests
-│   ├── test_truenas_rest_client.py  # REST client tests
+│   ├── test_truenas_websocket_client.py  # WebSocket client tests
 │   └── test_utils.py             # Utility function tests
 ├── Pipfile                       # Pipenv dependencies
 ├── Pipfile.lock
@@ -621,9 +626,10 @@ If you see "API key required for password verification":
 
 If you cannot connect to TrueNAS:
 1. Verify TrueNAS is accessible: `curl -k https://your-truenas-host/api/v2.0/system/info`
-2. Check firewall settings (port 443 for API, port 445 for SMB)
+2. Check firewall settings (port 443 for WebSocket API, port 445 for SMB)
 3. Verify `TRUENAS_HOST` in `.env` is correct
 4. Check SSL certificate settings (use `TRUENAS_USE_SSL=false` for HTTP)
+5. Ensure WebSocket connections are not blocked by proxies/firewalls
 
 ### Invalid Credentials
 
@@ -631,10 +637,6 @@ If you cannot connect to TrueNAS:
 - Check that the user account exists on the TrueNAS instance
 - For SMB users: Verify SMB service is enabled and running
 - Check TrueNAS logs for authentication failures
-
-### Python Crypt Deprecation Warning
-
-You may see a warning about the deprecated `crypt` module. This is expected and will be addressed in future Python versions. The application will continue to work normally.
 
 ## Limitations
 
@@ -648,8 +650,9 @@ You may see a warning about the deprecated `crypt` module. This is expected and 
 - Flask 3.x - Web framework
 - WTForms - Form validation
 - python-dotenv - Environment configuration
-- pysmb - SMB authentication (optional, used for SMB users)
-- requests - HTTP client for REST API
+- pysmb - SMB authentication (used for SMB users)
+- websocket-client - WebSocket client for TrueNAS API
+- passlib - Password hash verification (SHA-512, SHA-256, MD5)
 
 ## License
 
