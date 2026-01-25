@@ -37,6 +37,8 @@ class TestTrueNASWebSocketClient:
     def test_connect_success(self, mock_create_conn):
         """Test successful connection."""
         mock_ws = Mock()
+        # TrueNAS returns connected message after connect handshake
+        mock_ws.recv.return_value = '{"msg": "connected", "session": "test-session"}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost")
@@ -44,19 +46,24 @@ class TestTrueNASWebSocketClient:
         
         mock_create_conn.assert_called_once()
         assert client._ws is not None
+        assert client._session_id == "test-session"
     
     @patch('app.truenas_websocket_client.websocket.create_connection')
     def test_connect_with_api_key(self, mock_create_conn):
         """Test connection with API key authentication."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": true}'
+        # First call returns connected, second returns auth result
+        mock_ws.recv.side_effect = [
+            '{"msg": "connected", "session": "test-session"}',
+            '{"id": "1", "msg": "result", "result": true}'
+        ]
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
         client.connect()
         
-        # Should have sent auth request
-        mock_ws.send.assert_called()
+        # Should have sent connect and auth requests
+        assert mock_ws.send.call_count == 2
     
     @patch('app.truenas_websocket_client.websocket.create_connection')
     def test_connect_failure(self, mock_create_conn):
@@ -78,7 +85,8 @@ class TestTrueNASWebSocketClient:
     def test_call_success(self, mock_create_conn):
         """Test successful API call."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": {"key": "value"}}'
+        # TrueNAS middleware returns msg: result
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": {"key": "value"}}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost")
@@ -93,7 +101,8 @@ class TestTrueNASWebSocketClient:
     def test_call_error_response(self, mock_create_conn):
         """Test API call with error response."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "error": {"code": -1, "message": "Test error"}}'
+        # TrueNAS middleware error format
+        mock_ws.recv.return_value = '{"id": "1", "msg": "error", "error": {"error": -1, "reason": "Test error"}}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost")
@@ -108,8 +117,8 @@ class TestTrueNASWebSocketClient:
     def test_login_success(self, mock_create_conn, mock_verify):
         """Test successful login using hash verification."""
         mock_ws = Mock()
-        # Return user query response
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
+        # Return user query response in middleware format
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
         mock_create_conn.return_value = mock_ws
         
         # Mock passlib verify to return True
@@ -126,7 +135,7 @@ class TestTrueNASWebSocketClient:
     def test_login_invalid_credentials(self, mock_create_conn, mock_verify):
         """Test login with invalid credentials."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
         mock_create_conn.return_value = mock_ws
         
         # Mock passlib verify to return False
@@ -143,7 +152,7 @@ class TestTrueNASWebSocketClient:
     def test_login_otp_required(self, mock_create_conn):
         """Test login when OTP is required."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": true, "smb": false}]}'
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": true, "smb": false}]}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
@@ -157,7 +166,7 @@ class TestTrueNASWebSocketClient:
     def test_login_user_not_found(self, mock_create_conn):
         """Test login with non-existent user."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": []}'
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": []}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
@@ -182,8 +191,8 @@ class TestTrueNASWebSocketClient:
         mock_ws = Mock()
         # First call: user query, second call: user update
         mock_ws.recv.side_effect = [
-            '{"jsonrpc": "2.0", "id": "1", "result": [{"id": 1, "username": "testuser"}]}',
-            '{"jsonrpc": "2.0", "id": "2", "result": {"id": 1}}'
+            '{"id": "1", "msg": "result", "result": [{"id": 1, "username": "testuser"}]}',
+            '{"id": "2", "msg": "result", "result": {"id": 1}}'
         ]
         mock_create_conn.return_value = mock_ws
         
@@ -206,7 +215,7 @@ class TestTrueNASWebSocketClient:
     def test_set_password_user_not_found(self, mock_create_conn):
         """Test password change for non-existent user."""
         mock_ws = Mock()
-        mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": []}'
+        mock_ws.recv.return_value = '{"id": "1", "msg": "result", "result": []}'
         mock_create_conn.return_value = mock_ws
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
@@ -255,12 +264,13 @@ class TestWebSocketClientIntegration:
         # Mock passlib verify to return True
         mock_verify.return_value = True
         
-        # Setup responses for: auth, user query (login), user query (set_password), user update
+        # Setup responses for: connect, auth, user query (login), user query (set_password), user update
         mock_ws.recv.side_effect = [
-            '{"jsonrpc": "2.0", "id": "1", "result": true}',  # auth.login_with_api_key
-            '{"jsonrpc": "2.0", "id": "2", "result": [{"id": 1, "username": "testuser", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}',  # user.query for login
-            '{"jsonrpc": "2.0", "id": "3", "result": [{"id": 1, "username": "testuser"}]}',  # user.query for set_password
-            '{"jsonrpc": "2.0", "id": "4", "result": {"id": 1}}'  # user.update
+            '{"msg": "connected", "session": "test-session"}',  # connect handshake
+            '{"id": "1", "msg": "result", "result": true}',  # auth.login_with_api_key
+            '{"id": "2", "msg": "result", "result": [{"id": 1, "username": "testuser", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}',  # user.query for login
+            '{"id": "3", "msg": "result", "result": [{"id": 1, "username": "testuser"}]}',  # user.query for set_password
+            '{"id": "4", "msg": "result", "result": {"id": 1}}'  # user.update
         ]
         mock_create_conn.return_value = mock_ws
         

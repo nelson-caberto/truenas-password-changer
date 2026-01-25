@@ -1,6 +1,7 @@
-"""TrueNAS API client using WebSocket JSON-RPC 2.0.
+"""TrueNAS API client using WebSocket.
 
 Migration from deprecated REST API to WebSocket per TrueNAS 26.04 requirements.
+TrueNAS uses a custom middleware protocol over WebSocket (DDP-like), not standard JSON-RPC 2.0.
 Documentation: https://api.truenas.com/v25.10/jsonrpc.html
 """
 
@@ -25,10 +26,11 @@ class TrueNASAPIError(Exception):
 
 
 class TrueNASWebSocketClient:
-    """Client for TrueNAS using WebSocket JSON-RPC 2.0 API.
+    """Client for TrueNAS using WebSocket API.
     
-    This client uses the TrueNAS WebSocket JSON-RPC 2.0 API, which replaces
-    the deprecated REST API (removed in TrueNAS 26.04).
+    This client uses the TrueNAS WebSocket API, which replaces the deprecated
+    REST API (removed in TrueNAS 26.04). TrueNAS uses a custom middleware
+    protocol (DDP-like) with msg types: 'connect', 'method', 'result', 'error'.
     
     Authentication uses a dual approach to support ALL users (not just admins):
     1. SMB authentication (for users with SMB enabled)
@@ -51,6 +53,7 @@ class TrueNASWebSocketClient:
         self._ws: Optional[websocket.WebSocket] = None
         self._request_id = 0
         self._lock = threading.Lock()
+        self._session_id: Optional[str] = None
     
     def _get_ws_url(self) -> str:
         """Build the WebSocket URL.
@@ -62,11 +65,16 @@ class TrueNASWebSocketClient:
         return f"{protocol}://{self.host}:{self.port}/websocket"
     
     def _call(self, method: str, params: Any = None) -> Any:
-        """Make a JSON-RPC 2.0 call.
+        """Make a method call using TrueNAS middleware protocol.
+        
+        TrueNAS uses a custom DDP-like protocol:
+        - Request: {"id": "N", "msg": "method", "method": "...", "params": [...]}
+        - Response: {"id": "N", "msg": "result", "result": ...}
+        - Error: {"id": "N", "msg": "error", "error": {...}}
         
         Args:
-            method: JSON-RPC method name (e.g., 'user.query')
-            params: Method parameters (list or dict)
+            method: Method name (e.g., 'user.query')
+            params: Method parameters (list)
             
         Returns:
             Result from the API call.
@@ -81,10 +89,10 @@ class TrueNASWebSocketClient:
             self._request_id += 1
             request_id = str(self._request_id)
         
-        # Build JSON-RPC 2.0 request
+        # Build TrueNAS middleware request
         payload = {
-            "jsonrpc": "2.0",
             "id": request_id,
+            "msg": "method",
             "method": method,
             "params": params or []
         }
@@ -95,20 +103,29 @@ class TrueNASWebSocketClient:
             # Read response (may need to skip notifications)
             while True:
                 response_text = self._ws.recv()
+                if not response_text:
+                    raise TrueNASAPIError("Empty response from server")
+                    
                 response = json.loads(response_text)
                 
-                # Skip notifications (no id field)
-                if "id" in response:
+                # Skip notifications and other messages without matching id
+                if response.get("id") == request_id:
+                    break
+                # Also accept messages with msg type we care about
+                if response.get("msg") in ("result", "error") and response.get("id") == request_id:
                     break
             
-            # Check for JSON-RPC error
-            if "error" in response:
-                error = response["error"]
-                raise TrueNASAPIError(
-                    error.get("message", "Unknown error"),
-                    code=error.get("code"),
-                    reason=error.get("message")
-                )
+            # Check for error response
+            if response.get("msg") == "error" or "error" in response:
+                error = response.get("error", {})
+                if isinstance(error, dict):
+                    raise TrueNASAPIError(
+                        error.get("reason", error.get("message", "Unknown error")),
+                        code=error.get("error"),
+                        reason=error.get("reason")
+                    )
+                else:
+                    raise TrueNASAPIError(str(error))
             
             return response.get("result")
             
@@ -124,6 +141,11 @@ class TrueNASWebSocketClient:
     def connect(self) -> None:
         """Establish WebSocket connection to TrueNAS API.
         
+        TrueNAS requires a handshake before API calls:
+        1. Connect to WebSocket endpoint
+        2. Send connect message with version
+        3. Authenticate with API key
+        
         Raises:
             TrueNASAPIError: If connection fails.
         """
@@ -133,8 +155,25 @@ class TrueNASWebSocketClient:
             self._ws = websocket.create_connection(
                 self._get_ws_url(),
                 sslopt=sslopt,
-                timeout=10
+                timeout=30
             )
+            
+            # TrueNAS requires a connect handshake first
+            connect_msg = {
+                "msg": "connect",
+                "version": "1",
+                "support": ["1"]
+            }
+            self._ws.send(json.dumps(connect_msg))
+            
+            # Wait for connected response
+            response_text = self._ws.recv()
+            response = json.loads(response_text)
+            
+            if response.get("msg") != "connected":
+                raise TrueNASAPIError(f"Connect handshake failed: {response}")
+            
+            self._session_id = response.get("session")
             
             # Authenticate with API key if provided
             if self._api_key:
@@ -144,6 +183,8 @@ class TrueNASWebSocketClient:
                 
         except websocket.WebSocketException as e:
             raise TrueNASAPIError(f"Failed to connect: {str(e)}")
+        except json.JSONDecodeError as e:
+            raise TrueNASAPIError(f"Invalid response during connect: {str(e)}")
         except TrueNASAPIError:
             raise
         except Exception as e:
