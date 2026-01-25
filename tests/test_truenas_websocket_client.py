@@ -103,17 +103,17 @@ class TestTrueNASWebSocketClient:
             client._call("test.method")
         assert "Test error" in str(excinfo.value)
     
-    @patch('app.truenas_websocket_client.crypt.crypt')
+    @patch('app.truenas_websocket_client.sha512_crypt.verify')
     @patch('app.truenas_websocket_client.websocket.create_connection')
-    def test_login_success(self, mock_create_conn, mock_crypt):
+    def test_login_success(self, mock_create_conn, mock_verify):
         """Test successful login using hash verification."""
         mock_ws = Mock()
         # Return user query response
         mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
         mock_create_conn.return_value = mock_ws
         
-        # Mock crypt to return matching hash
-        mock_crypt.return_value = "$6$hash"
+        # Mock passlib verify to return True
+        mock_verify.return_value = True
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
         client._ws = mock_ws
@@ -121,16 +121,16 @@ class TestTrueNASWebSocketClient:
         result = client.login("admin", "password")
         assert result is True
     
-    @patch('app.truenas_websocket_client.crypt.crypt')
+    @patch('app.truenas_websocket_client.sha512_crypt.verify')
     @patch('app.truenas_websocket_client.websocket.create_connection')
-    def test_login_invalid_credentials(self, mock_create_conn, mock_crypt):
+    def test_login_invalid_credentials(self, mock_create_conn, mock_verify):
         """Test login with invalid credentials."""
         mock_ws = Mock()
         mock_ws.recv.return_value = '{"jsonrpc": "2.0", "id": "1", "result": [{"username": "admin", "unixhash": "$6$hash", "twofactor_auth_configured": false, "smb": false}]}'
         mock_create_conn.return_value = mock_ws
         
-        # Mock crypt to return non-matching hash
-        mock_crypt.return_value = "$6$wronghash"
+        # Mock passlib verify to return False
+        mock_verify.return_value = False
         
         client = TrueNASWebSocketClient(host="localhost", api_key="test_key")
         client._ws = mock_ws
@@ -246,14 +246,14 @@ class TestTrueNASWebSocketClient:
 class TestWebSocketClientIntegration:
     """Integration tests for WebSocket client (mocked)."""
     
-    @patch('app.truenas_websocket_client.crypt.crypt')
+    @patch('app.truenas_websocket_client.sha512_crypt.verify')
     @patch('app.truenas_websocket_client.websocket.create_connection')
-    def test_full_auth_and_password_change(self, mock_create_conn, mock_crypt):
+    def test_full_auth_and_password_change(self, mock_create_conn, mock_verify):
         """Test full authentication and password change flow."""
         mock_ws = Mock()
         
-        # Mock crypt to return matching hash for login
-        mock_crypt.return_value = "$6$hash"
+        # Mock passlib verify to return True
+        mock_verify.return_value = True
         
         # Setup responses for: auth, user query (login), user query (set_password), user update
         mock_ws.recv.side_effect = [

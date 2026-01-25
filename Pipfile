@@ -8,8 +8,8 @@ flask = "*"
 websocket-client = "*"
 wtforms = "*"
 python-dotenv = "*"
-requests = "*"
 pysmb = "*"
+passlib = "*"
 
 [dev-packages]
 pytest = "*"

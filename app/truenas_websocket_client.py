@@ -4,12 +4,14 @@ Migration from deprecated REST API to WebSocket per TrueNAS 26.04 requirements.
 Documentation: https://api.truenas.com/v25.10/jsonrpc.html
 """
 
-import crypt
 import json
 import ssl
 import threading
 from typing import Any, Optional
 import websocket
+
+# Use passlib for password hash verification (crypt deprecated in Python 3.13)
+from passlib.hash import sha512_crypt, sha256_crypt, md5_crypt
 
 
 class TrueNASAPIError(Exception):
@@ -208,10 +210,18 @@ class TrueNASWebSocketClient:
             if not stored_hash:
                 raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
             
-            # Verify password against stored hash
-            computed_hash = crypt.crypt(password, stored_hash)
+            # Verify password against stored hash using passlib
+            # TrueNAS uses SHA-512 ($6$), SHA-256 ($5$), or MD5 ($1$) hashes
+            if stored_hash.startswith("$6$"):
+                is_valid = sha512_crypt.verify(password, stored_hash)
+            elif stored_hash.startswith("$5$"):
+                is_valid = sha256_crypt.verify(password, stored_hash)
+            elif stored_hash.startswith("$1$"):
+                is_valid = md5_crypt.verify(password, stored_hash)
+            else:
+                raise TrueNASAPIError("Unsupported hash format", reason="Unsupported password hash format")
             
-            if computed_hash == stored_hash:
+            if is_valid:
                 return True
             else:
                 raise TrueNASAPIError("Invalid username or password", reason="Invalid username or password")
