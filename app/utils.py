@@ -4,18 +4,18 @@ import os
 from functools import wraps
 from flask import session, flash, redirect, url_for, current_app
 
-from app.truenas_rest_client import TrueNASRestClient
+from app.truenas_websocket_client import TrueNASWebSocketClient
 
 
 def get_truenas_client():
-    """Create a TrueNAS REST client from app configuration.
+    """Create a TrueNAS WebSocket client from app configuration.
     
     Returns:
-        Configured TrueNASRestClient instance.
+        Configured TrueNASWebSocketClient instance.
     """
     api_key = os.getenv('TRUENAS_API_KEY')
     
-    return TrueNASRestClient(
+    return TrueNASWebSocketClient(
         host=current_app.config['TRUENAS_HOST'],
         port=current_app.config['TRUENAS_PORT'],
         use_ssl=current_app.config['TRUENAS_USE_SSL'],
