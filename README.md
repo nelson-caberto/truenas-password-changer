@@ -11,7 +11,7 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 - Self-service password change
 - Simple, clean web interface
 - No password requirements enforced (TrueNAS handles validation)
-- **WebSocket JSON-RPC 2.0 API** (TrueNAS 26.04+ compatible)
+- **WebSocket API** (TrueNAS 26.04+ compatible)
 - Comprehensive testing (84 tests, 95%+ coverage)
 
 ## Compatibility
@@ -19,13 +19,13 @@ A simple Flask web application that allows TrueNAS users to change their own pas
 **Developed and Tested For:**
 - **TrueNAS SCALE 25.10.1** (primary target)
 - **TrueNAS SCALE 26.04+** (ready for WebSocket-only API)
-- WebSocket JSON-RPC 2.0 API
+- TrueNAS WebSocket Middleware Protocol
 
 **Expected to work with:**
 - TrueNAS SCALE 24.x and newer
 - TrueNAS SCALE 26.04+ (REST API removed, WebSocket required)
 
-**Note:** This application uses the WebSocket JSON-RPC 2.0 API, which is the only supported API in TrueNAS 26.04+. The deprecated REST API was removed in that release. Authentication uses standard Unix mechanisms (SMB and password hashes) that are platform-independent.
+**Note:** This application uses the TrueNAS WebSocket API with its custom middleware protocol (DDP-like), which is the only supported API in TrueNAS 26.04+. The deprecated REST API was removed in that release. Authentication uses standard Unix mechanisms (SMB and password hashes) that are platform-independent.
 
 **⚠️ Migration Notice:** If upgrading from an older version of this app that used the REST API, simply update to this version - no configuration changes needed. The WebSocket API uses the same ports and API keys.
 
@@ -174,12 +174,16 @@ TrueNAS SCALE restricts API authentication to users with admin roles. Regular us
 
 ## API Client Selection
 
-### WebSocket JSON-RPC 2.0 (Current)
+### WebSocket Middleware Protocol (Current)
 - **Status**: ✅ Fully functional and tested
 - **Why WebSocket**: TrueNAS deprecated the REST API and removed it in version 26.04
+- **Protocol**: TrueNAS uses a custom DDP-like middleware protocol over WebSocket:
+  - Connect handshake: `{"msg": "connect", "version": "1", "support": ["1"]}`
+  - Method calls: `{"id": "N", "msg": "method", "method": "...", "params": [...]}`
+  - Responses: `{"id": "N", "msg": "result", "result": ...}`
 - **Advantages**:
   - Future-proof (required for TrueNAS 26.04+)
-  - Native JSON-RPC 2.0 protocol
+  - Real-time bidirectional communication
   - Token-based authentication with API key
   - Works with hash verification method
 - **Documentation**: https://api.truenas.com/v25.10/jsonrpc.html
