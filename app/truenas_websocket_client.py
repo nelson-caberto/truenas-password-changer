@@ -220,6 +220,10 @@ class TrueNASWebSocketClient:
         if not self._api_key:
             raise TrueNASAPIError("API key required for password verification")
         
+        # Sanitize password for consistent handling
+        # Note: For login, we strip whitespace to be lenient with copy-paste
+        sanitized_password = self._sanitize_password(password)
+        
         try:
             # Query user data using WebSocket JSON-RPC
             users = self._call("user.query", [[["username", "=", username]]])
@@ -237,7 +241,7 @@ class TrueNASWebSocketClient:
             if user.get("smb"):
                 try:
                     from smb.SMBConnection import SMBConnection
-                    conn = SMBConnection(username, password, 'client', self.host, use_ntlm_v2=True)
+                    conn = SMBConnection(username, sanitized_password, 'client', self.host, use_ntlm_v2=True)
                     if conn.connect(self.host, 445, timeout=5):
                         conn.close()
                         return True
@@ -254,11 +258,11 @@ class TrueNASWebSocketClient:
             # Verify password against stored hash using passlib
             # TrueNAS uses SHA-512 ($6$), SHA-256 ($5$), or MD5 ($1$) hashes
             if stored_hash.startswith("$6$"):
-                is_valid = sha512_crypt.verify(password, stored_hash)
+                is_valid = sha512_crypt.verify(sanitized_password, stored_hash)
             elif stored_hash.startswith("$5$"):
-                is_valid = sha256_crypt.verify(password, stored_hash)
+                is_valid = sha256_crypt.verify(sanitized_password, stored_hash)
             elif stored_hash.startswith("$1$"):
-                is_valid = md5_crypt.verify(password, stored_hash)
+                is_valid = md5_crypt.verify(sanitized_password, stored_hash)
             else:
                 raise TrueNASAPIError("Unsupported hash format", reason="Unsupported password hash format")
             
@@ -271,6 +275,56 @@ class TrueNASWebSocketClient:
             raise
         except Exception as e:
             raise TrueNASAPIError(f"Authentication failed: {str(e)}")
+    
+    def _sanitize_password(self, password: str) -> str:
+        """Sanitize password to prevent encoding and interpretation issues.
+        
+        Handles common issues that cause password mismatches:
+        - Leading/trailing whitespace (often from copy-paste)
+        - Unicode normalization (NFC form for consistency)
+        - Null bytes and control characters
+        - Ensures proper UTF-8 encoding
+        
+        Args:
+            password: Raw password string.
+            
+        Returns:
+            Sanitized password string.
+            
+        Raises:
+            TrueNASAPIError: If password contains invalid characters.
+        """
+        import unicodedata
+        
+        if not password:
+            raise TrueNASAPIError("Password cannot be empty")
+        
+        # Strip leading/trailing whitespace (common copy-paste issue)
+        sanitized = password.strip()
+        
+        if not sanitized:
+            raise TrueNASAPIError("Password cannot be only whitespace")
+        
+        # Check for null bytes (can corrupt password storage)
+        if '\x00' in sanitized:
+            raise TrueNASAPIError("Password cannot contain null characters")
+        
+        # Check for control characters (except common ones like tab)
+        for char in sanitized:
+            if unicodedata.category(char) == 'Cc' and char not in '\t':
+                raise TrueNASAPIError("Password contains invalid control characters")
+        
+        # Normalize Unicode to NFC form for consistent representation
+        # This ensures characters like é are stored the same way regardless of input method
+        sanitized = unicodedata.normalize('NFC', sanitized)
+        
+        # Verify it's valid UTF-8 by encoding and decoding
+        try:
+            sanitized.encode('utf-8').decode('utf-8')
+        except (UnicodeEncodeError, UnicodeDecodeError) as e:
+            raise TrueNASAPIError(f"Password contains invalid characters: {e}")
+        
+        return sanitized
     
     def set_password(self, username: str, new_password: str) -> bool:
         """Change a user's password.
@@ -288,6 +342,9 @@ class TrueNASWebSocketClient:
         if not self._api_key:
             raise TrueNASAPIError("Not authenticated. API key required.")
         
+        # Sanitize password to prevent encoding issues
+        sanitized_password = self._sanitize_password(new_password)
+        
         try:
             # Query user to get user ID
             users = self._call("user.query", [[["username", "=", username]]])
@@ -298,7 +355,7 @@ class TrueNASWebSocketClient:
             user_id = users[0].get("id")
             
             # Update password using user.update method
-            self._call("user.update", [user_id, {"password": new_password}])
+            self._call("user.update", [user_id, {"password": sanitized_password}])
             
             return True
                 

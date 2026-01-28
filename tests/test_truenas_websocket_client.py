@@ -252,6 +252,79 @@ class TestTrueNASWebSocketClient:
         assert str(error) == "Test error"
 
 
+class TestPasswordSanitization:
+    """Tests for password sanitization."""
+    
+    def test_sanitize_strips_whitespace(self):
+        """Test that leading/trailing whitespace is stripped."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        assert client._sanitize_password("  password  ") == "password"
+        assert client._sanitize_password("\tpassword\n") == "password"
+    
+    def test_sanitize_preserves_internal_spaces(self):
+        """Test that internal spaces are preserved."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        assert client._sanitize_password("pass word") == "pass word"
+        assert client._sanitize_password("my secure password") == "my secure password"
+    
+    def test_sanitize_rejects_empty_password(self):
+        """Test that empty passwords are rejected."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client._sanitize_password("")
+        assert "empty" in str(excinfo.value).lower()
+    
+    def test_sanitize_rejects_whitespace_only(self):
+        """Test that whitespace-only passwords are rejected."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client._sanitize_password("   ")
+        assert "whitespace" in str(excinfo.value).lower()
+    
+    def test_sanitize_rejects_null_bytes(self):
+        """Test that null bytes are rejected."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client._sanitize_password("pass\x00word")
+        assert "null" in str(excinfo.value).lower()
+    
+    def test_sanitize_rejects_control_characters(self):
+        """Test that control characters are rejected."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        with pytest.raises(TrueNASAPIError) as excinfo:
+            client._sanitize_password("pass\x01word")
+        assert "control" in str(excinfo.value).lower()
+    
+    def test_sanitize_normalizes_unicode(self):
+        """Test that Unicode is normalized to NFC form."""
+        import unicodedata
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        
+        # é can be represented as single char (NFC) or e + combining accent (NFD)
+        nfc_form = "caf\u00e9"  # é as single character
+        nfd_form = "cafe\u0301"  # e + combining acute accent
+        
+        result_nfc = client._sanitize_password(nfc_form)
+        result_nfd = client._sanitize_password(nfd_form)
+        
+        # Both should normalize to NFC
+        assert result_nfc == result_nfd
+        assert unicodedata.is_normalized('NFC', result_nfc)
+        assert unicodedata.is_normalized('NFC', result_nfd)
+    
+    def test_sanitize_handles_special_characters(self):
+        """Test that special characters are preserved."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        special = "P@$$w0rd!#%^&*()_+-=[]{}|;':\",./<>?"
+        assert client._sanitize_password(special) == special
+    
+    def test_sanitize_handles_unicode_passwords(self):
+        """Test that Unicode passwords work correctly."""
+        client = TrueNASWebSocketClient(host="localhost", api_key="test")
+        unicode_pass = "密码パスワード🔐"
+        assert client._sanitize_password(unicode_pass) == unicode_pass
+
+
 class TestWebSocketClientIntegration:
     """Integration tests for WebSocket client (mocked)."""
     
